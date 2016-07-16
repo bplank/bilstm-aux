@@ -1,6 +1,10 @@
 ## bi-LSTM tagger
 
-Bidirectional Long-Short Term Memory tagger (http://arxiv.org/abs/1604.05529).
+Bidirectional Long-Short Term Memory tagger 
+
+If you use this tagger please cite our paper (to appear in ACL 2016):
+
+[1] http://arxiv.org/abs/1604.05529
 
 ### Requirements
 
@@ -30,8 +34,8 @@ And compile pycnn:
 
 `make`
 
-After successful installation open python and import pycnn, you should
-see something like:
+After successful installation open python and import pycnn, you can
+test if the installation worked with:
 
 ```
 >>> import pycnn
@@ -41,8 +45,63 @@ see something like:
 
 ```
 
+#### Results on UD1.3
 
-#### Todo:
+The table below provides results for training the
+tagger with i=20 iterations and h=1 layer on UD1.3.
 
-* make predictions available
-* make models available
++poly is using pre-trained embeddings to initialize
+word embeddings. 
+
+| Lang | i20-h1  | +poly |
+| ---| -----:| -----:|
+| ar | 96.07 | 96.37 |
+| bg | 98.21 | 98.12 |
+| ca | 98.11 | 98.24 |
+| cs | 98.63 | 98.60 |
+| cu | 96.48 | -- |
+| da | 96.06 | 96.04 |
+| de | 92.91 | 93.64 |
+| el | 97.85 | 98.36 |
+| en | 94.60 | 95.04 |
+| es | 95.23 | 95.76 |
+| et | 95.75 | 96.57 |
+| eu | 93.86 | 95.40 |
+| fa | 96.82 | 97.38 |
+| fi | 94.32 | 95.35 |
+| fr | 96.34 | 96.45 |
+| ga | 90.50 | 91.29 |
+| gl | 96.89 | -- |
+| got | 95.97 | -- |
+| grc | 94.36 | -- |
+| he | 95.25 | 96.78 |
+| hi | 96.37 | 96.93 |
+| hr | 94.98 | 96.07 |
+| hu | 93.84 | -- |
+| id | 93.17 | 93.55 |
+| it | 97.40 | 97.82 |
+| kk | 77.68 | -- |
+| la | 90.17 | -- |
+| lv | 91.42 | -- |
+| nl | 90.02 | 89.87 |
+| no | 97.58 | 97.97 |
+| pl | 96.30 | 97.36 |
+| pt | 97.21 | 97.46 |
+| ro | 95.49 | -- |
+| ru | 95.69 | -- |
+| sl | 97.53 | 96.42 |
+| sv | 96.49 | 96.76 |
+| ta | 84.51 | -- |
+| tr | 93.81 | -- |
+| zh | 93.13 | -- |
+
+For more information including pre-trained models
+visit [http://www.let.rug.nl/bplank/bilty/](http://www.let.rug.nl/bplank/bilty/)
+
+#### Embeddings
+
+The poly embeddings [(Al-Rfou et al.,
+2013)](https://sites.google.com/site/rmyeid/projects/polyglot) can be
+downloaded from [here](http://www.let.rug.nl/bplank/bilty/embeds.tar.gz)
+
+
