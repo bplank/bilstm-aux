@@ -2,9 +2,8 @@
 
 Bidirectional Long-Short Term Memory tagger 
 
-If you use this tagger please cite our paper (to appear in ACL 2016):
-
-[1] http://arxiv.org/abs/1604.05529
+If you use this tagger please cite our paper:
+http://arxiv.org/abs/1604.05529
 
 ### Requirements
 
@@ -102,6 +101,6 @@ visit [http://www.let.rug.nl/bplank/bilty/](http://www.let.rug.nl/bplank/bilty/)
 
 The poly embeddings [(Al-Rfou et al.,
 2013)](https://sites.google.com/site/rmyeid/projects/polyglot) can be
-downloaded from [here](http://www.let.rug.nl/bplank/bilty/embeds.tar.gz)
+downloaded from [here](http://www.let.rug.nl/bplank/bilty/embeds.tar.gz) (1.6GB)
 
 
