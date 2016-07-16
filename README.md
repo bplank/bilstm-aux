@@ -98,7 +98,7 @@ python src/bilty.py --cnn-seed 1512141834 --cnn-mem 1500 --train /home/$user/cor
 | tr | 93.81 | -- |
 | zh | 93.13 | -- |
 
-For more information including pre-trained models
+For more information, predictions files and pre-trained models
 visit [http://www.let.rug.nl/bplank/bilty/](http://www.let.rug.nl/bplank/bilty/)
 
 #### Embeddings
