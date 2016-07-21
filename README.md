@@ -97,6 +97,9 @@ python src/bilty.py --cnn-seed 1512141834 --cnn-mem 1500 --train /home/$user/cor
 | tr | 93.81 | -- |
 | zh | 93.13 | -- |
 
+Using pre-trained embeddings often helps to improve accuracy, however, does not
+strictly hold for all languages.
+
 For more information, predictions files and pre-trained models
 visit [http://www.let.rug.nl/bplank/bilty/](http://www.let.rug.nl/bplank/bilty/)
 
@@ -107,15 +110,34 @@ The poly embeddings [(Al-Rfou et al.,
 downloaded from [here](http://www.let.rug.nl/bplank/bilty/embeds.tar.gz) (0.6GB)
 
 
-##### A couple of remarks
+#### A couple of remarks
 
-The choice of 22 languages from UD1.2 follows the setup described in
-our TACL paper, Section 3.1. [(Agić et al.,
-2016)](https://transacl.org/ojs/index.php/tacl/article/view/869). However,
-as discussed in our paper the bi-LSTM tagger does not require large
-amounts of training data, hence above are the results for all UD1.3
-languages (for the canonical language subparts, i.e., those with just
-the language prefix, no further suffix; e.g. 'nl' but not 'nl_lassy').
+The choice of 22 languages from UD1.2 (rather than 33) is described in
+our TACL parsing paper, Section 3.1. [(Agić et al.,
+2016)](https://transacl.org/ojs/index.php/tacl/article/view/869). Note,
+however, that the bi-LSTM tagger does not require large amounts of
+training data (as discussed in our paper). Therefore we report above
+results for all languages in UD1.3 (for the canonical language
+subparts, i.e., those with just the language prefix, no further
+suffix; e.g. 'nl' but not 'nl_lassy', and those languages which are
+distributed with word forms).
 
+The `bilty` code is a significantly refactored version of the code
+originally used in the paper. For example, `bilty` supports multi-task
+learning with output layers at different layers (`--pred_layer`), and
+it correctly supports stacked LSTMs (see e.g., Ballesteros et al.,
+2015, Dyer et al., 2015). The results on UD1.3 are obtained with
+`bilty`.
 
+#### Reference
+
+```
+@inproceedings{plank:ea:2016,
+  title={{Multilingual Part-of-Speech Tagging with Bidirectional Long Short-Term Memory Models and Auxiliary Loss}},
+  author={Plank, Barbara and S{\o}gaard, Anders and Goldberg, Yoav},
+  booktitle={ACL 2016, arXiv preprint arXiv:1604.05529},
+  url={http://arxiv.org/abs/1604.05529},
+  year={2016}
+}
+```
 
