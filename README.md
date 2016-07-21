@@ -8,7 +8,7 @@ http://arxiv.org/abs/1604.05529
 ### Requirements
 
 * python3 
-* [pycnn](https://github.com/clab/cnn)
+* [cnn/pycnn](https://github.com/clab/cnn)
 
 ## Installation
 
@@ -46,11 +46,10 @@ test if the installation worked with:
 
 #### Results on UD1.3
 
-The table below provides results for training the
-tagger with i=20 iterations and h=1 layer on UD1.3.
+The table below provides results on UD1.3 (iters=20, h_layers=1).
 
 +poly is using pre-trained embeddings to initialize
-word embeddings. 
+word embeddings.  Note that for some languages it slightly hurts performance.
 
 ```
 python src/bilty.py --cnn-seed 1512141834 --cnn-mem 1500 --train /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-train.conllu --test /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-test.conllu --dev /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-dev.conllu --output /data/$user/experiments/bilty/predictions/bilty/en-ud-test.conllu.bilty-en-ud1.3-poly-i20-h1 --in_dim 64 --c_in_dim 100 --trainer sgd --iters 20 --sigma 0.2 --save /data/$user/experiments/bilty/models/bilty/bilty-en-ud1.3-poly-i20-h1.model --embeds embeds/poly_a/en.polyglot.txt --h_layers 1 --pred_layer 1  > /data/$user/experiments/bilty/nohup/bilty-en-ud1.3-poly-i20-h1.out 2> /data/$user/experiments/bilty/nohup/bilty.bilty-en-ud1.3-poly-i20-h1.out2
@@ -105,6 +104,18 @@ visit [http://www.let.rug.nl/bplank/bilty/](http://www.let.rug.nl/bplank/bilty/)
 
 The poly embeddings [(Al-Rfou et al.,
 2013)](https://sites.google.com/site/rmyeid/projects/polyglot) can be
-downloaded from [here](http://www.let.rug.nl/bplank/bilty/embeds.tar.gz) (1.6GB)
+downloaded from [here](http://www.let.rug.nl/bplank/bilty/embeds.tar.gz) (0.6GB)
+
+
+##### A couple of remarks
+
+The choice of 22 languages from UD1.2 follows the setup described in
+our TACL paper, Section 3.1. [(Agić et al.,
+2016)](https://transacl.org/ojs/index.php/tacl/article/view/869). However,
+as discussed in our paper the bi-LSTM tagger does not require large
+amounts of training data, hence above are the results for all UD1.3
+languages (for the canonical language subparts, i.e., those with just
+the language prefix, no further suffix; e.g. 'nl' but not 'nl_lassy').
+
 
 
