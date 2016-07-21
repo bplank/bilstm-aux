@@ -116,7 +116,7 @@ The choice of 22 languages from UD1.2 (rather than 33) is described in
 our TACL parsing paper, Section 3.1. [(Agić et al.,
 2016)](https://transacl.org/ojs/index.php/tacl/article/view/869). Note,
 however, that the bi-LSTM tagger does not require large amounts of
-training data (as discussed in our paper). Therefore we report above
+training data (as discussed in our paper). Therefore above are 
 results for all languages in UD1.3 (for the canonical language
 subparts, i.e., those with just the language prefix, no further
 suffix; e.g. 'nl' but not 'nl_lassy', and those languages which are
