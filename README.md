@@ -127,7 +127,11 @@ originally used in the paper. For example, `bilty` supports multi-task
 learning with output layers at different layers (`--pred_layer`), and
 it correctly supports stacked LSTMs (see e.g., Ballesteros et al.,
 2015, Dyer et al., 2015). The results on UD1.3 are obtained with
-`bilty`.
+`bilty` using no tacking (`--h_layers 1`). 
+
+Recommended setting for `bilty`:
+
+* 3 stacked LSTMs, predicting on outermost layer, otherwise default settings, i.e., `--h_layers 3 --pred_layer 3`
 
 #### Reference
 
