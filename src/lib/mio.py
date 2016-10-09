@@ -40,7 +40,7 @@ def read_conll_file(file_name):
         if line:
             if len(line.split("\t")) != 2:
                 if len(line.split("\t")) == 1: # emtpy words in gimpel
-                    raise "Issue with input file - doesn't have a tag or token?"
+                    raise IOError("Issue with input file - doesn't have a tag or token?")
                     #word = "|"
                     #tag = line.split("\t")[0]
                     #print(tag,file=sys.stderr)

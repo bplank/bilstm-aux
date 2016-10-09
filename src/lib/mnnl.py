@@ -16,7 +16,7 @@ class SequencePredictor:
         pass
     
     def predict_sequence(self, inputs):
-        raise "SequencePredictor predict_sequence: Not Implmented"
+        raise NotImplementedError("SequencePredictor predict_sequence: Not Implmented")
 
 class FFSequencePredictor(SequencePredictor):
     def __init__(self, network_builder):

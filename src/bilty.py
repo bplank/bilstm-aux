@@ -286,7 +286,7 @@ class NNTagger(object):
         # connect output layers to tasks
         for output_layer, task_id in zip(self.pred_layer, self.tasks_ids):
             if output_layer > self.h_layers:
-                raise "cannot have a task at a layer which is beyond the model, increase h_layers"
+                raise ValueError("cannot have a task at a layer which is beyond the model, increase h_layers")
             task_expected_at[task_id] = output_layer
 
         print("task expected at", task_expected_at, file=sys.stderr)
@@ -413,7 +413,7 @@ class NNTagger(object):
             prev = forward_sequence
             prev_rev = backward_sequence # not used
 
-        raise "oops should not be here"
+        raise Exception("oops should not be here")
         return None
 
     def evaluate(self, test_X, test_Y, org_X, org_Y, task_labels, output_predictions=None, verbose=True):
