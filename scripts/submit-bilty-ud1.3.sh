@@ -38,7 +38,7 @@ do
     echo "#SBATCH --error=runs/${JOBNAME}.out2" >> $$tmp
     echo "module load CMake" >> $$tmp
     
-    echo "python src/$tagger.py --cnn-seed $SEED --cnn-mem 1500 --train $CORPUSDIR/$TRAIN --test $CORPUSDIR/$lang-ud-test.conllu --dev $CORPUSDIR/$lang-ud-dev.conllu --output $EXPDIR/predictions/$tagger/$lang-ud-test.conllu.$JOBNAME --in_dim 64 --c_in_dim $CDIM --trainer $TRAINER --iters $ITERS --sigma $SIGMA --save $EXPDIR/models/$tagger/$JOBNAME.model --embeds embeds/poly_a/$lang.polyglot.txt --h_layers $HLAYERS --pred_layer $T0_OUT  > $EXPDIR/nohup/$JOBNAME.out 2> $EXPDIR/nohup/$tagger.$JOBNAME.out2" >> $$tmp
+    echo "python src/$tagger.py --dynet-seed $SEED --dynet-mem 1500 --train $CORPUSDIR/$TRAIN --test $CORPUSDIR/$lang-ud-test.conllu --dev $CORPUSDIR/$lang-ud-dev.conllu --output $EXPDIR/predictions/$tagger/$lang-ud-test.conllu.$JOBNAME --in_dim 64 --c_in_dim $CDIM --trainer $TRAINER --iters $ITERS --sigma $SIGMA --save $EXPDIR/models/$tagger/$JOBNAME.model --embeds embeds/poly_a/$lang.polyglot.txt --h_layers $HLAYERS --pred_layer $T0_OUT  > $EXPDIR/nohup/$JOBNAME.out 2> $EXPDIR/nohup/$tagger.$JOBNAME.out2" >> $$tmp
 
     if [ $SUBMIT -eq 1 ] ; then
 	echo "SUBMIT"
@@ -59,7 +59,7 @@ do
     echo "#SBATCH --error=runs/${JOBNAME}.out2" >> $$tmp
     echo "module load CMake" >> $$tmp
 
-    echo "python src/$tagger.py --cnn-seed $SEED --cnn-mem 1500 --train $CORPUSDIR/$TRAIN --test $CORPUSDIR/$lang-ud-test.conllu --dev $CORPUSDIR/$lang-ud-dev.conllu --output $EXPDIR/predictions/$tagger/$lang-ud-test.conllu.$JOBNAME --in_dim 64 --c_in_dim $CDIM --trainer $TRAINER --iters $ITERS --sigma $SIGMA --save $EXPDIR/models/$tagger/$JOBNAME.model --h_layers $HLAYERS --pred_layer $T0_OUT  > $EXPDIR/nohup/$JOBNAME.out 2> $EXPDIR/nohup/$tagger.$JOBNAME.out2" >> $$tmp
+    echo "python src/$tagger.py --dynet-seed $SEED --dynet-mem 1500 --train $CORPUSDIR/$TRAIN --test $CORPUSDIR/$lang-ud-test.conllu --dev $CORPUSDIR/$lang-ud-dev.conllu --output $EXPDIR/predictions/$tagger/$lang-ud-test.conllu.$JOBNAME --in_dim 64 --c_in_dim $CDIM --trainer $TRAINER --iters $ITERS --sigma $SIGMA --save $EXPDIR/models/$tagger/$JOBNAME.model --h_layers $HLAYERS --pred_layer $T0_OUT  > $EXPDIR/nohup/$JOBNAME.out 2> $EXPDIR/nohup/$tagger.$JOBNAME.out2" >> $$tmp
 
     if [ $SUBMIT -eq 1 ] ; then
         echo "SUBMIT"

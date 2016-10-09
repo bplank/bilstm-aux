@@ -3,7 +3,7 @@ my NN library
 (based on Yoav's)
 """
 from itertools import count
-import pycnn
+import dynet
 import numpy as np
 
 import sys
@@ -49,13 +49,13 @@ class BiRNNSequencePredictor(SequencePredictor):
         return forward_sequence, backward_sequence  # do concat only later! return separate forward and backward seq
         
 class Layer:
-    def __init__(self, model, in_dim, output_dim, activation=pycnn.tanh):
+    def __init__(self, model, in_dim, output_dim, activation=dynet.tanh):
         ident = str(next(global_counter))
         self.act = activation
         self.W = model.add_parameters("W_"+ident, (output_dim, in_dim))
         self.b = model.add_parameters("b_"+ident, (output_dim))
         
     def __call__(self, x):
-        W = pycnn.parameter(self.W)
-        b = pycnn.parameter(self.b)
+        W = dynet.parameter(self.W)
+        b = dynet.parameter(self.b)
         return self.act(W*x + b)

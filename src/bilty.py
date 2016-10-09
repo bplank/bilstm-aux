@@ -9,7 +9,7 @@ import sys
 import numpy as np
 import os
 import pickle
-import pycnn
+import dynet
 
 from lib.mnnl import FFSequencePredictor, Layer, RNNSequencePredictor, BiRNNSequencePredictor
 from lib.mio import read_conll_file, load_embeddings_file
@@ -34,8 +34,8 @@ def main():
     parser.add_argument("--sigma", help="noise sigma", required=False, default=0.2, type=float)
     parser.add_argument("--ac", help="activation function [rectify, tanh, ...]", default="tanh", type=MyNNTaggerArgumentOptions.acfunct)
     parser.add_argument("--trainer", help="trainer [sgd, adam] default: sgd", required=False, default="sgd")
-    parser.add_argument("--cnn-seed", help="random seed for cnn (needs to be first argument!)", required=False, type=int)
-    parser.add_argument("--cnn-mem", help="memory for cnn (needs to be first argument!)", required=False, type=int)
+    parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
+    parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--save-embeds", help="save word embeddings file", required=False, default=None)
 
     args = parser.parse_args()
@@ -45,10 +45,10 @@ def main():
             print("--pred_layer required!")
             exit()
     
-    if args.cnn_seed:
-        print(">>> using seed: ", args.cnn_seed, file=sys.stderr)
-        np.random.seed(args.cnn_seed)
-        random.seed(args.cnn_seed)
+    if args.dynet_seed:
+        print(">>> using seed: ", args.dynet_seed, file=sys.stderr)
+        np.random.seed(args.dynet_seed)
+        random.seed(args.dynet_seed)
 
     if args.c_in_dim == 0:
         print("no character embeddings", file=sys.stderr)
@@ -137,7 +137,7 @@ def load(args):
 
 def save(nntagger, args):
     """
-    save a model; pycnn only saves the parameters, need to store the rest separately
+    save a model; dynet only saves the parameters, need to store the rest separately
     """
     outdir = args.save
     modelname = outdir + ".model"
@@ -164,13 +164,13 @@ def save(nntagger, args):
 
 class NNTagger(object):
 
-    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=pycnn.tanh, lower=False, noise_sigma=0.1, tasks_ids=[]):
+    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=dynet.tanh, lower=False, noise_sigma=0.1, tasks_ids=[]):
         self.w2i = {}  # word to index mapping
         self.c2i = {}  # char to index mapping
         self.tasks_ids = tasks_ids # list of names for each task
         self.task2tag2idx = {} # need one dictionary per task
         self.pred_layer = [int(layer) for layer in pred_layer] # at which layer to predict each task
-        self.model = pycnn.Model() #init model
+        self.model = dynet.Model() #init model
         self.in_dim = in_dim
         self.h_dim = h_dim
         self.c_in_dim = c_in_dim
@@ -186,7 +186,7 @@ class NNTagger(object):
 
 
     def pick_neg_log(self, pred, gold):
-        return -pycnn.log(pycnn.pick(pred, gold))
+        return -dynet.log(dynet.pick(pred, gold))
 
     def set_indices(self, w2i, c2i, task2t2i):
         for task_id in task2t2i:
@@ -222,9 +222,9 @@ class NNTagger(object):
         self.predictors, self.char_rnn, self.wembeds, self.cembeds = self.build_computation_graph(num_words, num_chars)
 
         if train_algo == "sgd":
-            trainer = pycnn.SimpleSGDTrainer(self.model)
+            trainer = dynet.SimpleSGDTrainer(self.model)
         elif train_algo == "adam":
-            trainer = pycnn.AdamTrainer(self.model)
+            trainer = dynet.AdamTrainer(self.model)
 
         train_data = list(zip(train_X,train_Y, task_labels))
 
@@ -236,7 +236,7 @@ class NNTagger(object):
                 # use same predict function for training and testing
                 output = self.predict(word_indices, char_indices, task_of_instance, train=True)
 
-                loss1 = pycnn.esum([self.pick_neg_log(pred,gold) for pred, gold in zip(output, y)])
+                loss1 = dynet.esum([self.pick_neg_log(pred,gold) for pred, gold in zip(output, y)])
                 lv = loss1.value()
                 total_loss += lv
                 total_tagged += len(word_indices)
@@ -298,21 +298,21 @@ class NNTagger(object):
             print(">>>", layer_num, "layer_num") 
 
             if layer_num == 0:
-                builder = pycnn.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) # in_dim: size of each layer
+                builder = dynet.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) # in_dim: size of each layer
                 layers.append(BiRNNSequencePredictor(builder)) #returns forward and backward sequence
             else:
                 # add inner layers (if h_layers >1)
-                builder = pycnn.LSTMBuilder(1, self.h_dim, self.h_dim, self.model)
+                builder = dynet.LSTMBuilder(1, self.h_dim, self.h_dim, self.model)
                 layers.append(BiRNNSequencePredictor(builder))
 
        # store at which layer to predict task
         for task_id in self.tasks_ids:
             task_num_labels= len(self.task2tag2idx[task_id])
-            output_layers_dict[task_id] = FFSequencePredictor(Layer(self.model, self.h_dim*2, task_num_labels, pycnn.softmax))
+            output_layers_dict[task_id] = FFSequencePredictor(Layer(self.model, self.h_dim*2, task_num_labels, dynet.softmax))
 
         sys.stderr.write('#\nOutput layers'+str(len(output_layers_dict))+'\n')
 
-        char_rnn = RNNSequencePredictor(pycnn.LSTMBuilder(1, self.c_in_dim, self.c_in_dim, self.model))
+        char_rnn = RNNSequencePredictor(dynet.LSTMBuilder(1, self.c_in_dim, self.c_in_dim, self.model))
 
         predictors = {}
         predictors["inner"] = layers
@@ -367,7 +367,7 @@ class NNTagger(object):
         """
         predict tags for a sentence represented as char+word embeddings
         """
-        pycnn.renew_cg() # new graph
+        dynet.renew_cg() # new graph
 
         char_emb = []
         rev_char_emb = []
@@ -380,10 +380,10 @@ class NNTagger(object):
             rev_char_emb.append(rev_last_state)
             
         wfeatures = [self.wembeds[w] for w in word_indices]
-        features = [pycnn.concatenate([w,c,rev_c]) for w,c,rev_c in zip(wfeatures,char_emb,reversed(rev_char_emb))]
+        features = [dynet.concatenate([w,c,rev_c]) for w,c,rev_c in zip(wfeatures,char_emb,reversed(rev_char_emb))]
         
         if train: # only do at training time
-            features = [pycnn.noise(fe,self.noise_sigma) for fe in features]
+            features = [dynet.noise(fe,self.noise_sigma) for fe in features]
 
         output_expected_at_layer = self.predictors["task_expected_at"][task_id]
         output_expected_at_layer -=1
@@ -403,10 +403,10 @@ class NNTagger(object):
 
             if i == output_expected_at_layer:
                 output_predictor = self.predictors["output_layers_dict"][task_id] 
-                concat_layer = [pycnn.concatenate([f, b]) for f, b in zip(forward_sequence,reversed(backward_sequence))]
+                concat_layer = [dynet.concatenate([f, b]) for f, b in zip(forward_sequence,reversed(backward_sequence))]
 
                 if train and self.noise_sigma > 0.0:
-                    concat_layer = [pycnn.noise(fe,self.noise_sigma) for fe in concat_layer]
+                    concat_layer = [dynet.noise(fe,self.noise_sigma) for fe in concat_layer]
                 output = output_predictor.predict_sequence(concat_layer)
                 return output
 
@@ -554,7 +554,7 @@ class MyNNTaggerArgumentOptions(object):
     def acfunct(arg):
         """ check for allowed argument for --ac option """
         try:
-            functions = [pycnn.rectify, pycnn.tanh]
+            functions = [dynet.rectify, dynet.tanh]
             functions = { function.__name__ : function for function in functions}
             functions["None"] = None
             return functions[str(arg)]
