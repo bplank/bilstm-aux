@@ -8,39 +8,39 @@ http://arxiv.org/abs/1604.05529
 ### Requirements
 
 * python3 
-* [cnn/pycnn](https://github.com/clab/cnn)
+* [dynet](https://github.com/clab/dynet)
 
 ## Installation
 
-Download and install cnn in a directory of your choice CNNDIR: 
+Download and install dynet in a directory of your choice DYNETDIR: 
 
 ```
-mkdir $CNNDIR
-git clone https://github.com/clab/cnn
+mkdir $DYNETDIR
+git clone https://github.com/clab/dynet
 ```
 
 Follow the instructions in the Installation readme. However, after
-compiling cnn and before compiling pycnn, apply the following patch
+compiling DyNet and before compiling the Python binding, apply the following patch
 (as bilty uses python3): 
 
 ``` 
-cp pycnn_py3_patch.diff $CNNDIR
-cd $CNNDIR
-git apply pycnn_py3_patch.diff
+cp dynet_py3_patch.diff $DYNETDIR
+cd $DYNETDIR
+git apply dynet_py3_patch.diff
 ```
 
-And compile pycnn:
+And compile dynet:
 
 `make`
 
-After successful installation open python and import pycnn, you can
+After successful installation open python and import dynet, you can
 test if the installation worked with:
 
 ```
->>> import pycnn
-[cnn] random seed: 2809331847
-[cnn] allocating memory: 512MB
-[cnn] memory allocation done.
+>>> import dynet
+[dynet] random seed: 2809331847
+[dynet] allocating memory: 512MB
+[dynet] memory allocation done.
 
 ```
 
@@ -52,7 +52,7 @@ The table below provides results on UD1.3 (iters=20, h_layers=1).
 word embeddings.  Note that for some languages it slightly hurts performance.
 
 ```
-python src/bilty.py --cnn-seed 1512141834 --cnn-mem 1500 --train /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-train.conllu --test /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-test.conllu --dev /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-dev.conllu --output /data/$user/experiments/bilty/predictions/bilty/en-ud-test.conllu.bilty-en-ud1.3-poly-i20-h1 --in_dim 64 --c_in_dim 100 --trainer sgd --iters 20 --sigma 0.2 --save /data/$user/experiments/bilty/models/bilty/bilty-en-ud1.3-poly-i20-h1.model --embeds embeds/poly_a/en.polyglot.txt --h_layers 1 --pred_layer 1  > /data/$user/experiments/bilty/nohup/bilty-en-ud1.3-poly-i20-h1.out 2> /data/$user/experiments/bilty/nohup/bilty.bilty-en-ud1.3-poly-i20-h1.out2
+python src/bilty.py --dynet-seed 1512141834 --dynet-mem 1500 --train /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-train.conllu --test /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-test.conllu --dev /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-dev.conllu --output /data/$user/experiments/bilty/predictions/bilty/en-ud-test.conllu.bilty-en-ud1.3-poly-i20-h1 --in_dim 64 --c_in_dim 100 --trainer sgd --iters 20 --sigma 0.2 --save /data/$user/experiments/bilty/models/bilty/bilty-en-ud1.3-poly-i20-h1.model --embeds embeds/poly_a/en.polyglot.txt --h_layers 1 --pred_layer 1  > /data/$user/experiments/bilty/nohup/bilty-en-ud1.3-poly-i20-h1.out 2> /data/$user/experiments/bilty/nohup/bilty.bilty-en-ud1.3-poly-i20-h1.out2
 ```
 
 | Lang | i20-h1  | +poly |
