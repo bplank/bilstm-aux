@@ -21,8 +21,8 @@ def main():
     parser.add_argument("--pred_layer", nargs='*', help="layer of predictons for each task", required=True) # for each task the layer on which it is predicted (default 1)
     parser.add_argument("--model", help="load model from file", required=False)
     parser.add_argument("--iters", help="training iterations [default: 30]", required=False,type=int,default=30)
-    parser.add_argument("--in_dim", help="input dimension [default: 64]", required=False,type=int,default=64)
-    parser.add_argument("--c_in_dim", help="input dimension for character embeddings [default: 50]", required=False,type=int,default=50)
+    parser.add_argument("--in_dim", help="input dimension [default: 64] (like Polyglot embeds)", required=False,type=int,default=64)
+    parser.add_argument("--c_in_dim", help="input dimension for character embeddings [default: 100]", required=False,type=int,default=100)
     parser.add_argument("--h_dim", help="hidden dimension [default: 100]", required=False,type=int,default=100)
     parser.add_argument("--h_layers", help="number of stacked LSTMs [default: 1 = no stacking]", required=False,type=int,default=1)
     parser.add_argument("--test", nargs='*', help="test file(s)", required=False) # should be in the same order/task as train
