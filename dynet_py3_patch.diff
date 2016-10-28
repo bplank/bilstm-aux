@@ -22,7 +22,7 @@ index 755f537..3018139 100644
  
  __version__ = 2.0
 diff --git a/python/dynet.pyx b/python/dynet.pyx
-index 8469e85..0dfd09e 100644
+index 8469e85..a5368ab 100644
 --- a/python/dynet.pyx
 +++ b/python/dynet.pyx
 @@ -4,7 +4,7 @@ import sys
@@ -49,8 +49,8 @@ index 8469e85..0dfd09e 100644
              return
 -        fh = file(fname+".pym","w")
 -        pfh = file(fname+".pyk","w")
-+        fh = open(fname+".pym","w")
-+        pfh = open(fname+".pyk","w")
++        fh = open(fname.decode()+".pym","w")
++        pfh = open(fname.decode()+".pyk","w")
          cdef CModelSaver *saver = new CModelSaver(fname, self.thisptr)
          for c in components:
              self._save_one(c,saver,fh,pfh)
@@ -63,16 +63,17 @@ index 8469e85..0dfd09e 100644
              assert False,"unsupported type " + tp
  
      cpdef load(self, string fname):
-         if not os.path.isfile(fname+".pym"):
+-        if not os.path.isfile(fname+".pym"):
++        if not os.path.isfile(fname.decode()+".pym"):
              self.load_all(fname)
              return
 -        with file(fname+".pym","r") as fh:
-+        with open(fname+".pym","r") as fh:
++        with open(fname.decode()+".pym","r") as fh:
              types = fh.read().strip().split()
  
          cdef CModelLoader *loader = new CModelLoader(fname, self.thisptr)
 -        with file(fname+".pyk","r") as pfh:
-+        with open(fname+".pyk","r") as pfh:
++        with open(fname.decode()+".pyk","r") as pfh:
              params = []
              itypes = iter(types)
              while True: # until iterator is done
