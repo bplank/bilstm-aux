@@ -22,7 +22,7 @@ index 755f537..3018139 100644
  
  __version__ = 2.0
 diff --git a/python/dynet.pyx b/python/dynet.pyx
-index 8469e85..a5368ab 100644
+index 99e0e06..59e0a6b 100644
 --- a/python/dynet.pyx
 +++ b/python/dynet.pyx
 @@ -4,7 +4,7 @@ import sys
@@ -43,7 +43,7 @@ index 8469e85..a5368ab 100644
      c_argv = <char**>malloc(sizeof(char*) * len(args)) # TODO check failure?
      for idx, s in enumerate(args):
          c_argv[idx] = s
-@@ -316,8 +316,8 @@ cdef class Model: # {{{
+@@ -325,8 +325,8 @@ cdef class Model: # {{{
          if not components:
              self.save_all(fname)
              return
@@ -54,7 +54,16 @@ index 8469e85..a5368ab 100644
          cdef CModelSaver *saver = new CModelSaver(fname, self.thisptr)
          for c in components:
              self._save_one(c,saver,fh,pfh)
-@@ -362,18 +362,18 @@ cdef class Model: # {{{
+@@ -341,7 +341,7 @@ cdef class Model: # {{{
+         cdef GRUBuilder gb_
+         cdef LSTMBuilder lb_
+         cdef SimpleRNNBuilder sb_
+-        tp = itypes.next()
++        tp = next(itypes)
+         if tp == "param":
+             loader.fill_parameter(p)
+             param = Parameters.wrap_ptr(p)
+@@ -371,18 +371,18 @@ cdef class Model: # {{{
              saveable.restore_components(items)
              return saveable
          else:
@@ -77,7 +86,7 @@ index 8469e85..a5368ab 100644
              params = []
              itypes = iter(types)
              while True: # until iterator is done
-@@ -592,9 +592,6 @@ cdef class Expression: #{{{
+@@ -601,9 +601,6 @@ cdef class Expression: #{{{
      def __getitem__(self, int i):
          return pick(self, i)
  
