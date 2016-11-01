@@ -22,7 +22,7 @@ index 755f537..3018139 100644
  
  __version__ = 2.0
 diff --git a/python/dynet.pyx b/python/dynet.pyx
-index 99e0e06..59e0a6b 100644
+index 99e0e06..3e37b78 100644
 --- a/python/dynet.pyx
 +++ b/python/dynet.pyx
 @@ -4,7 +4,7 @@ import sys
@@ -43,17 +43,25 @@ index 99e0e06..59e0a6b 100644
      c_argv = <char**>malloc(sizeof(char*) * len(args)) # TODO check failure?
      for idx, s in enumerate(args):
          c_argv[idx] = s
-@@ -325,8 +325,8 @@ cdef class Model: # {{{
+@@ -321,13 +321,13 @@ cdef class Model: # {{{
+         else:
+             raise TypeError("Cannot save model component of type %s" % type(c))
+ 
+-    def save(self, string fname, components=None):
++    def save(self, fname, components=None):
          if not components:
-             self.save_all(fname)
+-            self.save_all(fname)
++            self.save_all(fname.encode())
              return
 -        fh = file(fname+".pym","w")
 -        pfh = file(fname+".pyk","w")
-+        fh = open(fname.decode()+".pym","w")
-+        pfh = open(fname.decode()+".pyk","w")
-         cdef CModelSaver *saver = new CModelSaver(fname, self.thisptr)
+-        cdef CModelSaver *saver = new CModelSaver(fname, self.thisptr)
++        fh = open(fname+".pym","w")
++        pfh = open(fname+".pyk","w")
++        cdef CModelSaver *saver = new CModelSaver(fname.encode(), self.thisptr)
          for c in components:
              self._save_one(c,saver,fh,pfh)
+         saver.done()
 @@ -341,7 +341,7 @@ cdef class Model: # {{{
          cdef GRUBuilder gb_
          cdef LSTMBuilder lb_
@@ -71,18 +79,19 @@ index 99e0e06..59e0a6b 100644
 +            print("Huh?")
              assert False,"unsupported type " + tp
  
-     cpdef load(self, string fname):
--        if not os.path.isfile(fname+".pym"):
-+        if not os.path.isfile(fname.decode()+".pym"):
+-    cpdef load(self, string fname):
++    cpdef load(self, fname):
+         if not os.path.isfile(fname+".pym"):
              self.load_all(fname)
              return
 -        with file(fname+".pym","r") as fh:
-+        with open(fname.decode()+".pym","r") as fh:
++        with open(fname+".pym","r") as fh:
              types = fh.read().strip().split()
  
-         cdef CModelLoader *loader = new CModelLoader(fname, self.thisptr)
+-        cdef CModelLoader *loader = new CModelLoader(fname, self.thisptr)
 -        with file(fname+".pyk","r") as pfh:
-+        with open(fname.decode()+".pyk","r") as pfh:
++        cdef CModelLoader *loader = new CModelLoader(fname.encode(), self.thisptr)
++        with open(fname+".pyk","r") as pfh:
              params = []
              itypes = iter(types)
              while True: # until iterator is done
