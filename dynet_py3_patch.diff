@@ -1,16 +1,3 @@
-diff --git a/python/CHANGES.md b/python/CHANGES.md
-index d8bac41..9510bd7 100644
---- a/python/CHANGES.md
-+++ b/python/CHANGES.md
-@@ -181,7 +181,7 @@ y = x*x
- cg_checkpoint()
- z = y+y
- w = z+y
--print w.npvalue()
-+print(w.npvalue())
- cg_revert()
- # at this point x and y are still alive, but z and w are deleted,
- # they are not part of the computation graph anymore and the c-level memory
 diff --git a/python/dynet.py b/python/dynet.py
 index 755f537..3018139 100644
 --- a/python/dynet.py
@@ -35,7 +22,7 @@ index 755f537..3018139 100644
  
  __version__ = 2.0
 diff --git a/python/dynet.pyx b/python/dynet.pyx
-index bc60e19..c61028f 100644
+index 99e0e06..3e37b78 100644
 --- a/python/dynet.pyx
 +++ b/python/dynet.pyx
 @@ -4,7 +4,7 @@ import sys
@@ -56,18 +43,35 @@ index bc60e19..c61028f 100644
      c_argv = <char**>malloc(sizeof(char*) * len(args)) # TODO check failure?
      for idx, s in enumerate(args):
          c_argv[idx] = s
-@@ -255,8 +255,8 @@ cdef class Model: # {{{
+@@ -321,13 +321,13 @@ cdef class Model: # {{{
+         else:
+             raise TypeError("Cannot save model component of type %s" % type(c))
+ 
+-    def save(self, string fname, components=None):
++    def save(self, fname, components=None):
          if not components:
-             self.save_all(fname)
+-            self.save_all(fname)
++            self.save_all(fname.encode())
              return
 -        fh = file(fname+".pym","w")
 -        pfh = file(fname+".pyk","w")
+-        cdef CModelSaver *saver = new CModelSaver(fname, self.thisptr)
 +        fh = open(fname+".pym","w")
 +        pfh = open(fname+".pyk","w")
-         cdef CModelSaver *saver = new CModelSaver(fname, self.thisptr)
++        cdef CModelSaver *saver = new CModelSaver(fname.encode(), self.thisptr)
          for c in components:
              self._save_one(c,saver,fh,pfh)
-@@ -301,18 +301,18 @@ cdef class Model: # {{{
+         saver.done()
+@@ -341,7 +341,7 @@ cdef class Model: # {{{
+         cdef GRUBuilder gb_
+         cdef LSTMBuilder lb_
+         cdef SimpleRNNBuilder sb_
+-        tp = itypes.next()
++        tp = next(itypes)
+         if tp == "param":
+             loader.fill_parameter(p)
+             param = Parameters.wrap_ptr(p)
+@@ -371,18 +371,18 @@ cdef class Model: # {{{
              saveable.restore_components(items)
              return saveable
          else:
@@ -75,7 +79,8 @@ index bc60e19..c61028f 100644
 +            print("Huh?")
              assert False,"unsupported type " + tp
  
-     cpdef load(self, string fname):
+-    cpdef load(self, string fname):
++    cpdef load(self, fname):
          if not os.path.isfile(fname+".pym"):
              self.load_all(fname)
              return
@@ -83,13 +88,14 @@ index bc60e19..c61028f 100644
 +        with open(fname+".pym","r") as fh:
              types = fh.read().strip().split()
  
-         cdef CModelLoader *loader = new CModelLoader(fname, self.thisptr)
+-        cdef CModelLoader *loader = new CModelLoader(fname, self.thisptr)
 -        with file(fname+".pyk","r") as pfh:
++        cdef CModelLoader *loader = new CModelLoader(fname.encode(), self.thisptr)
 +        with open(fname+".pyk","r") as pfh:
              params = []
              itypes = iter(types)
              while True: # until iterator is done
-@@ -531,9 +531,6 @@ cdef class Expression: #{{{
+@@ -601,9 +601,6 @@ cdef class Expression: #{{{
      def __getitem__(self, int i):
          return pick(self, i)
  
@@ -99,15 +105,6 @@ index bc60e19..c61028f 100644
      cpdef scalar_value(self, recalculate=False):
          if self.cg_version != _cg._cg_version: raise RuntimeError("Stale Expression (created before renewing the Computation Graph).")
          if recalculate: self.cg().forward(self.vindex) # TODO: make recalculate run on the entire graph, not only up to here?
-@@ -816,7 +813,7 @@ cpdef Expression esum(list xs):
-     for x in xs:
-         ensure_freshness(x)
-         cvec.push_back(x.c())
--    #print >> sys.stderr, cvec.size()
-+    #print(>> sys.stderr, cvec.size())
-     return Expression.from_cexpr(x.cg_version, c_sum(cvec))
- 
- cpdef Expression average(list xs):
 diff --git a/python/dynet_viz.py b/python/dynet_viz.py
 index 6f902c8..be1c919 100644
 --- a/python/dynet_viz.py
