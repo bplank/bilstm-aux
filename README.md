@@ -32,7 +32,9 @@ git apply dynet_py3_patch.diff
 
 And compile dynet:
 
-`cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python``
+```
+cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python`
+```
 
 (if you have a GPU:
 
