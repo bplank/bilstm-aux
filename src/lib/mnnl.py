@@ -52,8 +52,8 @@ class Layer:
     def __init__(self, model, in_dim, output_dim, activation=dynet.tanh):
         ident = str(next(global_counter))
         self.act = activation
-        self.W = model.add_parameters("W_"+ident, (output_dim, in_dim))
-        self.b = model.add_parameters("b_"+ident, (output_dim))
+        self.W = model.add_parameters((output_dim, in_dim)) 
+        self.b = model.add_parameters((output_dim))
         
     def __call__(self, x):
         W = dynet.parameter(self.W)

@@ -258,8 +258,8 @@ class NNTagger(object):
             assert(emb_dim==self.in_dim)
             num_words=len(set(embeddings.keys()).union(set(self.w2i.keys()))) # initialize all with embeddings
             # init model parameters and initialize them
-            wembeds = self.model.add_lookup_parameters("lookup_wembeds", (num_words, self.in_dim))
-            cembeds = self.model.add_lookup_parameters("lookup_cembeds", (num_chars, self.c_in_dim))
+            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim))
+            cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
                
             init=0
             l = len(embeddings.keys())
@@ -274,8 +274,8 @@ class NNTagger(object):
             print("initialized: {}".format(init), file=sys.stderr)
 
         else:
-            wembeds = self.model.add_lookup_parameters("lookup_wembeds", (num_words, self.in_dim))
-            cembeds = self.model.add_lookup_parameters("lookup_cembeds", (num_chars, self.c_in_dim))
+            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim))
+            cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
                
 
         #make it more flexible to add number of layers as specified by parameter

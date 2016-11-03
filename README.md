@@ -19,9 +19,10 @@ mkdir $DYNETDIR
 git clone https://github.com/clab/dynet
 ```
 
-Follow the instructions in the Installation readme. However, after
-compiling DyNet and before compiling the Python binding, apply the following patch
-(as bilty uses python3): 
+Follow the instructions in the Dynet documentation (use `-DPYTHON`,
+see http://dynet.readthedocs.io/en/latest/python.html). However, after
+compiling DyNet and before compiling the Python binding, apply the
+following patch (as bilty uses python3):
 
 ``` 
 cp dynet_py3_patch.diff $DYNETDIR
@@ -31,7 +32,12 @@ git apply dynet_py3_patch.diff
 
 And compile dynet:
 
-`make`
+`cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python``
+
+(if you have a GPU:
+
+`cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python` -DBACKEND=cuda`
+)
 
 After successful installation open python and import dynet, you can
 test if the installation worked with:
@@ -41,10 +47,15 @@ test if the installation worked with:
 [dynet] random seed: 2809331847
 [dynet] allocating memory: 512MB
 [dynet] memory allocation done.
-
+>>> dynet.__version__
+2.0
 ```
 
+(You may need to set you PYTHONPATH to include Dynet's `build/python`)
+
 #### Results on UD1.3
+
+NB. The results below are with the previous version of Dynet (pycnn).
 
 The table below provides results on UD1.3 (iters=20, h_layers=1).
 
