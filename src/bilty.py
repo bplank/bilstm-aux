@@ -1,5 +1,7 @@
+#!/usr/bin/env python3
+# coding=utf-8
 """
-A neural network based tagger 
+A neural network based tagger  (bi-LSTM)
 :author: Barbara Plank
 """
 import argparse
