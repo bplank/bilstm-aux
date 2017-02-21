@@ -20,15 +20,7 @@ git clone https://github.com/clab/dynet
 ```
 
 Follow the instructions in the Dynet documentation (use `-DPYTHON`,
-see http://dynet.readthedocs.io/en/latest/python.html). However, after
-compiling DyNet and before compiling the Python binding, apply the
-following patch (as bilty uses python3):
-
-``` 
-cp dynet_py3_patch.diff $DYNETDIR
-cd $DYNETDIR
-git apply dynet_py3_patch.diff
-```
+see http://dynet.readthedocs.io/en/latest/python.html). 
 
 And compile dynet:
 
@@ -56,6 +48,13 @@ test if the installation worked with:
 ```
 
 (You may need to set you PYTHONPATH to include Dynet's `build/python`)
+
+#### DyNet supports python 3
+
+The old bilstm-aux had a patch to work with python 3. This
+is no longer necessary, as DyNet supports python 3 as of
+https://github.com/clab/dynet/pull/130#issuecomment-259656695
+
 
 #### Results on UD1.3
 
