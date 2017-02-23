@@ -29,7 +29,7 @@ def main():
     parser.add_argument("--h_layers", help="number of stacked LSTMs [default: 1 = no stacking]", required=False,type=int,default=1)
     parser.add_argument("--test", nargs='*', help="test file(s)", required=False) # should be in the same order/task as train
     parser.add_argument("--dev", help="dev file(s)", required=False) 
-    parser.add_argument("--output", help="output predictions to stdout", required=False,default=None)
+    parser.add_argument("--output", help="output predictions to file", required=False,default=None)
     parser.add_argument("--lower", help="lowercase words (not used)", required=False,default=False,action="store_true")
     parser.add_argument("--save", help="save model to file (appends .model as well as .pickle)", required=False,default=None)
     parser.add_argument("--embeds", help="word embeddings file", required=False, default=None)
