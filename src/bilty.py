@@ -122,7 +122,7 @@ def load(args):
     """
     load a model from file; specify the .model file, it assumes the *pickle file in the same location
     """
-    myparams = pickle.load(open(args.model+".pickle", "rb"))#python3 needs it as bytes
+    myparams = pickle.load(open(args.model+".pickle", "rb"))
     tagger = NNTagger(myparams["in_dim"],
                       myparams["h_dim"],
                       myparams["c_in_dim"],
@@ -133,7 +133,8 @@ def load(args):
     tagger.predictors, tagger.char_rnn, tagger.wembeds, tagger.cembeds = \
         tagger.build_computation_graph(myparams["num_words"],
                                        myparams["num_chars"])
-    tagger.model.load(str.encode(args.model))
+    #tagger.model.load(str.encode(args.model))
+    tagger.model.load(args.model)
     print("model loaded: {}".format(args.model), file=sys.stderr)
     return tagger
 
@@ -143,7 +144,8 @@ def save(nntagger, args):
     """
     outdir = args.save
     modelname = outdir + ".model"
-    nntagger.model.save(str.encode(modelname))  #python3 needs it as bytes
+    #nntagger.model.save(str.encode(modelname))  #python3 needs it as bytes - no longer!
+    nntagger.model.save(modelname)
     import pickle
     print(nntagger.task2tag2idx)
     myparams = {"num_words": len(nntagger.w2i),
@@ -213,6 +215,9 @@ class NNTagger(object):
         # store mappings of words and tags to indices
         self.set_indices(w2i,c2i,task2t2i)
 
+        if dev:
+            dev_X, dev_Y, org_X, org_Y, task_labels = self.get_data_as_indices(dev, "task0")
+
         # init lookup parameters and define graph
         print("build graph",file=sys.stderr)
         
@@ -247,6 +252,12 @@ class NNTagger(object):
                 trainer.update()
 
             print("iter {2} {0:>12}: {1:.2f}".format("total loss",total_loss/total_tagged,iter), file=sys.stderr)
+            
+            if dev:
+                # evaluate after every epoch
+                correct, total = self.evaluate(dev_X, dev_Y, org_X, org_Y, task_labels)
+                print("\ndev accuracy: %.4f" % (correct/total), file=sys.stderr)
+
 
 
     def build_computation_graph(self, num_words, num_chars):
