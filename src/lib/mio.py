@@ -7,13 +7,16 @@ def load_embeddings_file(file_name, sep=" ",lower=False):
     load embeddings file
     """
     emb={}
-    for line in open(file_name):
-        fields = line.split(sep)
-        vec = [float(x) for x in fields[1:]]
-        word = fields[0]
-        if lower:
-            word = word.lower()
-        emb[word] = vec
+    for line in open(file_name, errors='ignore', encoding='utf-8'):
+        try:
+            fields = line.strip().split(sep)
+            vec = [float(x) for x in fields[1:]]
+            word = fields[0]
+            if lower:
+                word = word.lower()
+            emb[word] = vec
+        except ValueError:
+            print("Error converting: {}".format(line))
 
     print("loaded pre-trained embeddings (word->emb_vec) size: {} (lower: {})".format(len(emb.keys()), lower))
     return emb, len(emb[word])
