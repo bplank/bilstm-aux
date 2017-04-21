@@ -16,6 +16,14 @@ import dynet
 from lib.mnnl import FFSequencePredictor, Layer, RNNSequencePredictor, BiRNNSequencePredictor
 from lib.mio import read_conll_file, load_embeddings_file
 
+## DyNet adds init option to choose initializer
+## (Gloriot odd behavior for pre-trained embeds -> prefer Constant)
+INITIALIZER_MAP = {
+                    'glorot': dynet.GlorotInitializer(),
+                    'constant': dynet.ConstInitializer(0.01),
+                    'uniform': dynet.UniformInitializer(0.1),
+                    'normal': dynet.NormalInitializer(mean = 0, var = 1)
+                  }
 
 def main():
     parser = argparse.ArgumentParser(description="""Run the NN tagger""")
@@ -39,6 +47,7 @@ def main():
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--save-embeds", help="save word embeddings file", required=False, default=None)
     parser.add_argument("--disable-backprob-embeds", help="disable backprob into embeddings (default: True)", required=False, action="store_false", default=True)
+    parser.add_argument("--initializer", help="initializer for embeddings (default: Glorot)", choices=INITIALIZER_MAP.keys(), default=INITIALIZER_MAP["glorot"])
 
     args = parser.parse_args()
 
@@ -82,7 +91,8 @@ def main():
                               embeds_file=args.embeds,
                               activation=args.ac,
                               noise_sigma=args.sigma,
-                              backprob_embeds=args.disable_backprob_embeds
+                              backprob_embeds=args.disable_backprob_embeds,
+                              initializer=INITIALIZER_MAP[args.initializer]
                           )
 
     if args.train and len( args.train ) != 0:
@@ -129,12 +139,13 @@ def load(args):
                       myparams["c_in_dim"],
                       myparams["h_layers"],
                       myparams["pred_layer"],
-                      activation=myparams["activation"], tasks_ids=myparams["tasks_ids"])
+                      activation=myparams["activation"],
+                      tasks_ids=myparams["tasks_ids"],
+                      )
     tagger.set_indices(myparams["w2i"],myparams["c2i"],myparams["task2tag2idx"])
     tagger.predictors, tagger.char_rnn, tagger.wembeds, tagger.cembeds = \
         tagger.build_computation_graph(myparams["num_words"],
                                        myparams["num_chars"])
-    #tagger.model.load(str.encode(args.model))
     tagger.model.load(args.model)
     print("model loaded: {}".format(args.model), file=sys.stderr)
     return tagger
@@ -148,7 +159,6 @@ def save(nntagger, args):
     #nntagger.model.save(str.encode(modelname))  #python3 needs it as bytes - no longer!
     nntagger.model.save(modelname)
     import pickle
-    print(nntagger.task2tag2idx)
     myparams = {"num_words": len(nntagger.w2i),
                 "num_chars": len(nntagger.c2i),
                 "tasks_ids": nntagger.tasks_ids,
@@ -161,7 +171,7 @@ def save(nntagger, args):
                 "c_in_dim": nntagger.c_in_dim,
                 "h_layers": nntagger.h_layers,
                 "embeds_file": nntagger.embeds_file,
-                "pred_layer": nntagger.pred_layer
+                "pred_layer": nntagger.pred_layer,
                 }
     pickle.dump(myparams, open( modelname+".pickle", "wb" ) )
     print("model stored: {}".format(modelname), file=sys.stderr)
@@ -169,7 +179,7 @@ def save(nntagger, args):
 
 class NNTagger(object):
 
-    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=dynet.tanh,backprob_embeds=True,noise_sigma=0.1, tasks_ids=[]):
+    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=dynet.tanh,backprob_embeds=True,noise_sigma=0.1, tasks_ids=[],initializer=INITIALIZER_MAP["glorot"]):
         self.w2i = {}  # word to index mapping
         self.c2i = {}  # char to index mapping
         self.tasks_ids = tasks_ids # list of names for each task
@@ -187,6 +197,7 @@ class NNTagger(object):
         self.cembeds = None # lookup: embeddings for characters
         self.embeds_file = embeds_file
         self.backprob_embeds = backprob_embeds
+        self.initializer = initializer
         self.char_rnn = None # RNN for character input
 
 
@@ -232,7 +243,10 @@ class NNTagger(object):
         if not self.backprob_embeds:
             ## disable backprob into embeds (default: True)
             self.wembeds.set_updated(False)
-            print(">>> disable wembeds update <<< (is updated: {})".format(self.wembeds.is_updated()))
+            print(">>> disable wembeds update <<< (is updated: {})".format(self.wembeds.is_updated()), file=sys.stderr)
+
+        if self.initializer != dynet.GlorotInitializer:
+            print(">>> using initializer: {} <<<".format(self.initializer), file=sys.stderr)
 
         if train_algo == "sgd":
             trainer = dynet.SimpleSGDTrainer(self.model)
@@ -283,21 +297,20 @@ class NNTagger(object):
             l = len(embeddings.keys())
             for word in embeddings.keys():
                 # for those words we have already in w2i, update vector, otherwise add to w2i (since we keep data as integers)
-                if word in self.w2i:
-                    wembeds.init_row(self.w2i[word], embeddings[word])
-                else:
+                if word not in self.w2i:
                     self.w2i[word]=len(self.w2i.keys()) # add new word
-                    wembeds.init_row(self.w2i[word], embeddings[word])
+                wembeds.init_row(self.w2i[word], embeddings[word])
                 init+=1
             print("initialized: {}".format(init), file=sys.stderr)
 
         else:
-            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim))
+            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim), init=self.initializer)
+
 
         ## initialize character embeddings
         cembeds = None
         if self.c_in_dim > 0:
-            cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
+            cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim), init=self.initializer)
                
 
         #make it more flexible to add number of layers as specified by parameter
@@ -310,12 +323,8 @@ class NNTagger(object):
             if output_layer > self.h_layers:
                 raise ValueError("cannot have a task at a layer which is beyond the model, increase h_layers")
             task_expected_at[task_id] = output_layer
-
-        print("task expected at", task_expected_at, file=sys.stderr)
-
         nb_tasks = len( self.tasks_ids )
 
-        print("h_layers:", self.h_layers, file=sys.stderr)
         for layer_num in range(0,self.h_layers):
             if layer_num == 0:
                 if self.c_in_dim > 0:
@@ -329,12 +338,10 @@ class NNTagger(object):
                 builder = dynet.LSTMBuilder(1, self.h_dim, self.h_dim, self.model)
                 layers.append(BiRNNSequencePredictor(builder))
 
-       # store at which layer to predict task
+        # store at which layer to predict task
         for task_id in self.tasks_ids:
             task_num_labels= len(self.task2tag2idx[task_id])
             output_layers_dict[task_id] = FFSequencePredictor(Layer(self.model, self.h_dim*2, task_num_labels, dynet.softmax))
-
-        sys.stderr.write('#\nOutput layers'+str(len(output_layers_dict))+'\n')
 
         char_rnn = RNNSequencePredictor(dynet.LSTMBuilder(1, self.c_in_dim, self.c_in_dim, self.model))
 
@@ -423,7 +430,7 @@ class NNTagger(object):
         # input is now combination of w + char emb
         prev = features
         num_layers = self.h_layers
-#        for i in range(0,num_layers-1):
+
         for i in range(0,num_layers):
             predictor = self.predictors["inner"][i]
             forward_sequence, backward_sequence = predictor.predict_sequence(prev)        
@@ -457,7 +464,6 @@ class NNTagger(object):
         if output_predictions != None:
             i2w = {self.w2i[w] : w for w in self.w2i.keys()}
             task_id = task_labels[0] #get first
-            print(task_id,"labels:", self.task2tag2idx[task_id], file=sys.stderr )
             i2t = {self.task2tag2idx[task_id][t] : t for t in self.task2tag2idx[task_id].keys()}
 
         for i, ((word_indices, word_char_indices), gold_tag_indices, task_of_instance) in enumerate(zip(test_X, test_Y, task_labels)):
