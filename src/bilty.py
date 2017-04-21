@@ -12,7 +12,7 @@ import numpy as np
 import os
 import pickle
 import dynet
-
+from collections import Counter
 from lib.mnnl import FFSequencePredictor, Layer, RNNSequencePredictor, BiRNNSequencePredictor
 from lib.mio import read_conll_file, load_embeddings_file
 
@@ -23,6 +23,13 @@ INITIALIZER_MAP = {
                     'uniform': dynet.UniformInitializer(0.1),
                     'normal': dynet.NormalInitializer(mean = 0, var = 1)
                   }
+
+TRAINER_MAP = {
+            "sgd": dynet.SimpleSGDTrainer,
+            "adam": dynet.AdamTrainer,
+            "adadelta": dynet.AdadeltaTrainer,
+            "adagrad": dynet.AdagradTrainer
+           }
 
 def main():
     parser = argparse.ArgumentParser(description="""Run the NN tagger""")
@@ -41,11 +48,12 @@ def main():
     parser.add_argument("--embeds", help="word embeddings file", required=False, default=None)
     parser.add_argument("--sigma", help="noise sigma", required=False, default=0.2, type=float)
     parser.add_argument("--ac", help="activation function [rectify, tanh, ...]", default="tanh", type=MyNNTaggerArgumentOptions.acfunct)
-    parser.add_argument("--trainer", help="trainer [sgd, adam] default: sgd", required=False, default="sgd")
+    parser.add_argument("--trainer", help="trainer [default: sgd]", required=False, choices=TRAINER_MAP.keys(), default=TRAINER_MAP["sgd"])
+    parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0=disabled], recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0, type=float)
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--save-embeds", help="save word embeddings file", required=False, default=None)
-    parser.add_argument("--disable-backprob-embeds", help="disable backprob into embeddings (default: True)", required=False, action="store_false", default=True)
+    parser.add_argument("--disable-backprob-embeds", help="disable backprob into embeddings (default is to update)", required=False, action="store_false", default=True)
     parser.add_argument("--initializer", help="initializer for embeddings (default: Glorot)", choices=INITIALIZER_MAP.keys(), default=INITIALIZER_MAP["glorot"])
 
     args = parser.parse_args()
@@ -74,7 +82,6 @@ def main():
             outdir = os.path.dirname(args.output)
             if not os.path.exists(outdir):
                 os.makedirs(outdir)
-            
 
     start = time.time()
 
@@ -95,7 +102,7 @@ def main():
                           )
 
     if args.train and len( args.train ) != 0:
-        tagger.fit(args.train, args.iters, args.trainer, dev=args.dev)
+        tagger.fit(args.train, args.iters, TRAINER_MAP[args.trainer], dev=args.dev, word_dropout_rate=args.word_dropout_rate)
         if args.save:
             save(tagger, args)
 
@@ -121,9 +128,9 @@ def main():
         activation=args.ac.__name__
     else:
         activation="None"
-    print("Info: biLSTM\n\tin_dim: {0}\n\tc_in_dim: {6}\n\th_dim: {1}"
-          "\n\th_layers: {2}\n\tactivation: {4}\n\tsigma: {5}\n"
-          "\tembeds: {3}".format(args.in_dim,args.h_dim,args.h_layers,args.embeds,activation, args.sigma, args.c_in_dim), file=sys.stderr)
+
+    print("Info: biLSTM\n"+"\n\t".join(["{}: {}".format(a,v) for a, v in vars(args).items()
+                                      if a not in ["train","test","dev","pred_layer"]]))
 
     if args.save_embeds:
         tagger.save_embeds(args.save_embeds)
@@ -209,7 +216,7 @@ class NNTagger(object):
         self.w2i = w2i
         self.c2i = c2i
 
-    def fit(self, list_folders_name, num_iterations, train_algo, dev=None):
+    def fit(self, list_folders_name, num_iterations, train_algo, dev=None, word_dropout_rate=0.0):
         """
         train the tagger
         """
@@ -226,6 +233,12 @@ class NNTagger(object):
         # store mappings of words and tags to indices
         self.set_indices(w2i,c2i,task2t2i)
 
+        # if we use word dropout keep track of counts
+        if word_dropout_rate > 0.0:
+            widCount = Counter()
+            for sentence, _ in train_X:
+                widCount.update([w for w in sentence])
+
         if dev:
             dev_X, dev_Y, org_X, org_Y, dev_task_labels = self.get_data_as_indices(dev, "task0")
 
@@ -239,18 +252,17 @@ class NNTagger(object):
         
         self.predictors, self.char_rnn, self.wembeds, self.cembeds = self.build_computation_graph(num_words, num_chars)
 
-        if not self.backprob_embeds:
+        if self.backprob_embeds == False:
             ## disable backprob into embeds (default: True)
             self.wembeds.set_updated(False)
             print(">>> disable wembeds update <<< (is updated: {})".format(self.wembeds.is_updated()), file=sys.stderr)
 
-        if self.initializer != dynet.GlorotInitializer:
-            print(">>> using initializer: {} <<<".format(self.initializer), file=sys.stderr)
 
-        if train_algo == "sgd":
-            trainer = dynet.SimpleSGDTrainer(self.model)
-        elif train_algo == "adam":
-            trainer = dynet.AdamTrainer(self.model)
+        #if train_algo == "sgd":
+        #    trainer = dynet.SimpleSGDTrainer(self.model)
+        #elif train_algo == "adam":
+        #    trainer = dynet.AdamTrainer(self.model)
+        trainer = train_algo(self.model)
 
         train_data = list(zip(train_X,train_Y, task_labels))
 
@@ -259,6 +271,13 @@ class NNTagger(object):
             total_tagged=0.0
             random.shuffle(train_data)
             for ((word_indices,char_indices),y, task_of_instance) in train_data:
+
+                if word_dropout_rate > 0.0:
+                    word_indices = [self.w2i["_UNK"] if
+                                        (random.random() > (widCount.get(w)/(word_dropout_rate+widCount.get(w))))
+                                        else w for w in word_indices]
+                    #print(Counter(word_indices).get(0), "dropped")
+
                 # use same predict function for training and testing
                 output = self.predict(word_indices, char_indices, task_of_instance, train=True)
 
