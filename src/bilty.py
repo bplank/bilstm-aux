@@ -16,8 +16,7 @@ import dynet
 from lib.mnnl import FFSequencePredictor, Layer, RNNSequencePredictor, BiRNNSequencePredictor
 from lib.mio import read_conll_file, load_embeddings_file
 
-## DyNet adds init option to choose initializer
-## (Gloriot odd behavior for pre-trained embeds -> prefer Constant)
+## DyNet adds init option to choose initializer: https://github.com/clab/dynet/blob/master/python/CHANGES.md
 INITIALIZER_MAP = {
                     'glorot': dynet.GlorotInitializer(),
                     'constant': dynet.ConstInitializer(0.01),
