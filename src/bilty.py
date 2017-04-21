@@ -48,12 +48,12 @@ def main():
             exit()
     
     if args.dynet_seed:
-        print(">>> using seed: ", args.dynet_seed, file=sys.stderr)
+        print(">>> using seed: {} <<< ".format(args.dynet_seed), file=sys.stderr)
         np.random.seed(args.dynet_seed)
         random.seed(args.dynet_seed)
 
     if args.c_in_dim == 0:
-        print("no character embeddings", file=sys.stderr)
+        print(">>> disable character embeddings <<<", file=sys.stderr)
 
     if args.save:
         # check if folder exists
@@ -264,7 +264,7 @@ class NNTagger(object):
         """
         build graph and link to parameters
         """
-         # initialize the word embeddings and the parameters
+        ## initialize word embeddings
         if self.embeds_file:
             print("loading embeddings", file=sys.stderr)
             embeddings, emb_dim = load_embeddings_file(self.embeds_file, lower=self.lower)
@@ -272,8 +272,7 @@ class NNTagger(object):
             num_words=len(set(embeddings.keys()).union(set(self.w2i.keys()))) # initialize all with embeddings
             # init model parameters and initialize them
             wembeds = self.model.add_lookup_parameters((num_words, self.in_dim))
-            cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
-               
+
             init=0
             l = len(embeddings.keys())
             for word in embeddings.keys():
@@ -288,6 +287,10 @@ class NNTagger(object):
 
         else:
             wembeds = self.model.add_lookup_parameters((num_words, self.in_dim))
+
+        ## initialize character embeddings
+        cembeds = None
+        if self.c_in_dim > 0:
             cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
                
 
@@ -309,7 +312,11 @@ class NNTagger(object):
         print("h_layers:", self.h_layers, file=sys.stderr)
         for layer_num in range(0,self.h_layers):
             if layer_num == 0:
-                builder = dynet.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) # in_dim: size of each layer
+                if self.c_in_dim > 0:
+                    builder = dynet.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) # in_dim: size of each layer
+                else:
+                    builder = dynet.LSTMBuilder(1, self.in_dim, self.h_dim, self.model)
+
                 layers.append(BiRNNSequencePredictor(builder)) #returns forward and backward sequence
             else:
                 # add inner layers (if h_layers >1)
@@ -343,15 +350,16 @@ class NNTagger(object):
                 word_indices.append(self.w2i[word])
             else:
                 word_indices.append(self.w2i["_UNK"])
-                
-            chars_of_word = [self.c2i["<w>"]]
-            for char in word:
-                if char in self.c2i:
-                    chars_of_word.append(self.c2i[char])
-                else:
-                    chars_of_word.append(self.c2i["_UNK"])
-            chars_of_word.append(self.c2i["</w>"])
-            word_char_indices.append(chars_of_word)
+
+            if self.c_in_dim > 0:
+                chars_of_word = [self.c2i["<w>"]]
+                for char in word:
+                    if char in self.c2i:
+                        chars_of_word.append(self.c2i[char])
+                    else:
+                        chars_of_word.append(self.c2i["_UNK"])
+                chars_of_word.append(self.c2i["</w>"])
+                word_char_indices.append(chars_of_word)
         return word_indices, word_char_indices
                                                                                                                                 
 
@@ -380,18 +388,24 @@ class NNTagger(object):
         """
         dynet.renew_cg() # new graph
 
-        char_emb = []
-        rev_char_emb = []
-        # get representation for words
-        for chars_of_token in char_indices:
-            # use last state as word representation
-            last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in chars_of_token])[-1]
-            rev_last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in reversed(chars_of_token)])[-1]
-            char_emb.append(last_state)
-            rev_char_emb.append(rev_last_state)
-            
+        # word embeddings
         wfeatures = [self.wembeds[w] for w in word_indices]
-        features = [dynet.concatenate([w,c,rev_c]) for w,c,rev_c in zip(wfeatures,char_emb,reversed(rev_char_emb))]
+
+        # char embeddings
+        if self.c_in_dim > 0:
+            char_emb = []
+            rev_char_emb = []
+            # get representation for words
+            for chars_of_token in char_indices:
+                # use last state as word representation
+                last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in chars_of_token])[-1]
+                rev_last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in reversed(chars_of_token)])[-1]
+                char_emb.append(last_state)
+                rev_char_emb.append(rev_last_state)
+
+            features = [dynet.concatenate([w,c,rev_c]) for w,c,rev_c in zip(wfeatures,char_emb,reversed(rev_char_emb))]
+        else:
+            features = wfeatures
         
         if train: # only do at training time
             features = [dynet.noise(fe,self.noise_sigma) for fe in features]
@@ -516,13 +530,14 @@ class NNTagger(object):
                         w2i[word] = len(w2i)
                     instance_word_indices.append(w2i[word])
 
-                    chars_of_word = [c2i["<w>"]]
-                    for char in word:
-                        if char not in c2i:
-                            c2i[char] = len(c2i)
-                        chars_of_word.append(c2i[char])
-                    chars_of_word.append(c2i["</w>"])
-                    instance_char_indices.append(chars_of_word)
+                    if self.c_in_dim > 0:
+                        chars_of_word = [c2i["<w>"]]
+                        for char in word:
+                            if char not in c2i:
+                                c2i[char] = len(c2i)
+                            chars_of_word.append(c2i[char])
+                        chars_of_word.append(c2i["</w>"])
+                        instance_char_indices.append(chars_of_word)
                             
                     if tag not in task2tag2idx[task_id]:
                         #tag2idx[tag]=len(tag2idx)
@@ -547,6 +562,10 @@ class NNTagger(object):
 
 
     def save_embeds(self, out_filename):
+        """
+        save final embeddings to file
+        :param out_filename: filename
+        """
         # construct reverse mapping
         i2w = {self.w2i[w]: w for w in self.w2i.keys()}
 
