@@ -30,7 +30,6 @@ def main():
     parser.add_argument("--test", nargs='*', help="test file(s)", required=False) # should be in the same order/task as train
     parser.add_argument("--dev", help="dev file(s)", required=False) 
     parser.add_argument("--output", help="output predictions to file", required=False,default=None)
-    parser.add_argument("--lower", help="lowercase words (not used)", required=False,default=False,action="store_true")
     parser.add_argument("--save", help="save model to file (appends .model as well as .pickle)", required=False,default=None)
     parser.add_argument("--embeds", help="word embeddings file", required=False, default=None)
     parser.add_argument("--sigma", help="noise sigma", required=False, default=0.2, type=float)
@@ -81,7 +80,6 @@ def main():
                               args.pred_layer,
                               embeds_file=args.embeds,
                               activation=args.ac,
-                              lower=args.lower,
                               noise_sigma=args.sigma)
 
     if args.train and len( args.train ) != 0:
@@ -111,9 +109,9 @@ def main():
         activation=args.ac.__name__
     else:
         activation="None"
-    print("Info: biLSTM\n\tin_dim: {0}\n\tc_in_dim: {7}\n\th_dim: {1}"
-          "\n\th_layers: {2}\n\tactivation: {4}\n\tsigma: {5}\n\tlower: {6}"
-          "\tembeds: {3}".format(args.in_dim,args.h_dim,args.h_layers,args.embeds,activation, args.sigma, args.lower, args.c_in_dim), file=sys.stderr)
+    print("Info: biLSTM\n\tin_dim: {0}\n\tc_in_dim: {6}\n\th_dim: {1}"
+          "\n\th_layers: {2}\n\tactivation: {4}\n\tsigma: {5}\n"
+          "\tembeds: {3}".format(args.in_dim,args.h_dim,args.h_layers,args.embeds,activation, args.sigma, args.c_in_dim), file=sys.stderr)
 
     if args.save_embeds:
         tagger.save_embeds(args.save_embeds)
@@ -168,7 +166,7 @@ def save(nntagger, args):
 
 class NNTagger(object):
 
-    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=dynet.tanh, lower=False, noise_sigma=0.1, tasks_ids=[]):
+    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=dynet.tanh, noise_sigma=0.1, tasks_ids=[]):
         self.w2i = {}  # word to index mapping
         self.c2i = {}  # char to index mapping
         self.tasks_ids = tasks_ids # list of names for each task
@@ -179,7 +177,6 @@ class NNTagger(object):
         self.h_dim = h_dim
         self.c_in_dim = c_in_dim
         self.activation = activation
-        self.lower = lower
         self.noise_sigma = noise_sigma
         self.h_layers = h_layers
         self.predictors = {"inner": [], "output_layers_dict": {}, "task_expected_at": {} } # the inner layers and predictors
@@ -267,7 +264,7 @@ class NNTagger(object):
         ## initialize word embeddings
         if self.embeds_file:
             print("loading embeddings", file=sys.stderr)
-            embeddings, emb_dim = load_embeddings_file(self.embeds_file, lower=self.lower)
+            embeddings, emb_dim = load_embeddings_file(self.embeds_file)
             assert(emb_dim==self.in_dim)
             num_words=len(set(embeddings.keys()).union(set(self.w2i.keys()))) # initialize all with embeddings
             # init model parameters and initialize them
@@ -483,9 +480,7 @@ class NNTagger(object):
 
     def get_train_data(self, list_folders_name):
         """
-
         :param list_folders_name: list of folders names
-        :param lower: whether to lowercase tokens
 
         transform training data to features (word indices)
         map tags to integers
