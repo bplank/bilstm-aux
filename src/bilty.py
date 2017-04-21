@@ -38,6 +38,7 @@ def main():
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--save-embeds", help="save word embeddings file", required=False, default=None)
+    parser.add_argument("--disable-backprob-embeds", help="disable backprob into embeddings (default: True)", required=False, action="store_false", default=True)
 
     args = parser.parse_args()
 
@@ -80,7 +81,9 @@ def main():
                               args.pred_layer,
                               embeds_file=args.embeds,
                               activation=args.ac,
-                              noise_sigma=args.sigma)
+                              noise_sigma=args.sigma,
+                              backprob_embeds=args.disable_backprob_embeds
+                          )
 
     if args.train and len( args.train ) != 0:
         tagger.fit(args.train, args.iters, args.trainer, dev=args.dev)
@@ -166,7 +169,7 @@ def save(nntagger, args):
 
 class NNTagger(object):
 
-    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=dynet.tanh, noise_sigma=0.1, tasks_ids=[]):
+    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=dynet.tanh,backprob_embeds=True,noise_sigma=0.1, tasks_ids=[]):
         self.w2i = {}  # word to index mapping
         self.c2i = {}  # char to index mapping
         self.tasks_ids = tasks_ids # list of names for each task
@@ -183,6 +186,7 @@ class NNTagger(object):
         self.wembeds = None # lookup: embeddings for words
         self.cembeds = None # lookup: embeddings for characters
         self.embeds_file = embeds_file
+        self.backprob_embeds = backprob_embeds
         self.char_rnn = None # RNN for character input
 
 
@@ -224,6 +228,11 @@ class NNTagger(object):
         assert(nb_tasks==len(self.pred_layer))
         
         self.predictors, self.char_rnn, self.wembeds, self.cembeds = self.build_computation_graph(num_words, num_chars)
+
+        if not self.backprob_embeds:
+            ## disable backprob into embeds (default: True)
+            self.wembeds.set_updated(False)
+            print(">>> disable wembeds update <<< (is updated: {})".format(self.wembeds.is_updated()))
 
         if train_algo == "sgd":
             trainer = dynet.SimpleSGDTrainer(self.model)
