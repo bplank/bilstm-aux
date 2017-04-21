@@ -48,13 +48,13 @@ def main():
     parser.add_argument("--embeds", help="word embeddings file", required=False, default=None)
     parser.add_argument("--sigma", help="noise sigma", required=False, default=0.2, type=float)
     parser.add_argument("--ac", help="activation function [rectify, tanh, ...]", default="tanh", type=MyNNTaggerArgumentOptions.acfunct)
-    parser.add_argument("--trainer", help="trainer [default: sgd]", required=False, choices=TRAINER_MAP.keys(), default=TRAINER_MAP["sgd"])
+    parser.add_argument("--trainer", help="trainer [default: sgd]", required=False, choices=TRAINER_MAP.keys(), default="sgd")
     parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0=disabled], recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0, type=float)
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--save-embeds", help="save word embeddings file", required=False, default=None)
     parser.add_argument("--disable-backprob-embeds", help="disable backprob into embeddings (default is to update)", required=False, action="store_false", default=True)
-    parser.add_argument("--initializer", help="initializer for embeddings (default: Glorot)", choices=INITIALIZER_MAP.keys(), default=INITIALIZER_MAP["glorot"])
+    parser.add_argument("--initializer", help="initializer for embeddings (default: glorot)", choices=INITIALIZER_MAP.keys(), default="glorot")
 
     args = parser.parse_args()
 
@@ -129,7 +129,7 @@ def main():
     else:
         activation="None"
 
-    print("Info: biLSTM\n"+"\n\t".join(["{}: {}".format(a,v) for a, v in vars(args).items()
+    print("Info: biLSTM\n\t"+"\n\t".join(["{}: {}".format(a,v) for a, v in vars(args).items()
                                       if a not in ["train","test","dev","pred_layer"]]))
 
     if args.save_embeds:
