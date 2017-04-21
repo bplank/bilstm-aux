@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 # coding=utf-8
 """
-A neural network based tagger  (bi-LSTM) - version w/o MTL
+A neural network based tagger (bi-LSTM) - version w/o MTL, and more easily callable from code (see run_simple.py)
 :author: Barbara Plank
+
+Diffs to bilty:
+* no support for MTL
+* fewer options, like no --output option, no word dropout
 """
 import argparse
 import random
@@ -19,23 +23,20 @@ from lib.mio import read_conll_file, load_embeddings_file
 
 def main():
     parser = argparse.ArgumentParser(description="""Run the NN tagger""")
-    parser.add_argument("--train", help="train data") # allow multiple train files, each asociated with a task = position in the list
-    #parser.add_argument("--pred_layer", help="layer of predictons", default=1) # assume always h_layer here
+    parser.add_argument("--train", help="training data in CoNLL tabular format")
     parser.add_argument("--model", help="load model from file", required=False)
     parser.add_argument("--iters", help="training iterations [default: 30]", required=False,type=int,default=30)
     parser.add_argument("--in_dim", help="input dimension [default: 64] (like Polyglot embeds)", required=False,type=int,default=64)
-    parser.add_argument("--c_in_dim", help="input dimension for character embeddings [default: 100]", required=False,type=int,default=100)
+    parser.add_argument("--c_in_dim", help="input dimension for character embeddings; if set to 0 disable lower-level char lstm [default: 100]", required=False,type=int,default=100)
     parser.add_argument("--h_dim", help="hidden dimension [default: 100]", required=False,type=int,default=100)
     parser.add_argument("--h_layers", help="number of stacked LSTMs [default: 1 = no stacking]", required=False,type=int,default=1)
-    parser.add_argument("--test", nargs='*', help="test file(s)", required=False) # should be in the same order/task as train
+    parser.add_argument("--test", nargs='*', help="test file(s)", required=False)
     parser.add_argument("--dev", help="dev file(s)", required=False) 
-    parser.add_argument("--output", help="output predictions to file", required=False,default=None)
-    parser.add_argument("--lower", help="lowercase words (not used)", required=False,default=False,action="store_true")
     parser.add_argument("--save", help="save model to file (appends .model as well as .pickle)", required=False,default=None)
     parser.add_argument("--embeds", help="word embeddings file", required=False, default=None)
     parser.add_argument("--sigma", help="noise sigma", required=False, default=0.2, type=float)
     parser.add_argument("--ac", help="activation function [rectify, tanh, ...]", default="tanh", type=MyNNTaggerArgumentOptions.acfunct)
-    parser.add_argument("--trainer", help="trainer [sgd, adam] default: sgd", required=False, default="sgd")
+    parser.add_argument("--trainer", help="trainer [sgd, adam] default: adam", required=False, default="adam")
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--save-embeds", help="save word embeddings file", required=False, default=None)
@@ -48,14 +49,10 @@ def main():
             modeldir = os.path.dirname(args.save)
             if not os.path.exists(modeldir):
                 os.makedirs(modeldir)
-    if args.output:
-        if os.path.isdir(args.output):
-            outdir = os.path.dirname(args.output)
-            if not os.path.exists(outdir):
-                os.makedirs(outdir)
 
     start = time.time()
 
+    print(">> Running simplebilty <<", file=sys.stderr)
     if args.model:
         print("loading model from file {}".format(args.model), file=sys.stderr)
         tagger = load(args)
@@ -66,7 +63,6 @@ def main():
                               args.h_layers,
                               embeds_file=args.embeds,
                               activation=args.ac,
-                              lower=args.lower,
                               noise_sigma=args.sigma)
 
     if args.train:
@@ -74,10 +70,10 @@ def main():
         train_X, train_Y = tagger.get_train_data(args.train)
 
 
-        if dev:
-            dev_X, dev_Y, org_X, org_Y, task_labels = self.get_data_as_indices(dev, "task0")
+        if args.dev:
+            dev_X, dev_Y = tagger.get_data_as_indices(args.dev)
 
-        tagger.fit(args.train, args.iters, args.trainer, seed=args.dynet_seed)
+        tagger.fit(train_X, train_Y, args.iters, args.trainer, seed=args.dynet_seed)
         if args.save:
             save(tagger, args)
 
@@ -85,14 +81,11 @@ def main():
         stdout = sys.stdout
         # One file per test ... 
         for i, test in enumerate( args.test ):
-            if args.output != None:
-                file_pred = args.output+".task"+str(i)
-                sys.stdout = open(file_pred, 'w')
 
-            sys.stderr.write('\nTesting Task'+str(i)+'\n')
+            sys.stderr.write('\nTesting\n')
             sys.stderr.write('*******\n')
-            test_X, test_Y, org_X, org_Y, task_labels = tagger.get_data_as_indices(test, "task"+str(i))
-            correct, total = tagger.evaluate(test_X, test_Y, org_X, org_Y, task_labels, output_predictions=args.output)
+            test_X, test_Y = tagger.get_data_as_indices(test)
+            correct, total = tagger.evaluate(test_X, test_Y)
 
             print("\ntask%s test accuracy on %s items: %.4f" % (i, i+1, correct/total), file=sys.stderr)
             print(("Task"+str(i)+" Done. Took {0:.2f} seconds.".format(time.time()-start)),file=sys.stderr)
@@ -103,9 +96,9 @@ def main():
         activation=args.ac.__name__
     else:
         activation="None"
-    print("Info: biLSTM\n\tin_dim: {0}\n\tc_in_dim: {7}\n\th_dim: {1}"
-          "\n\th_layers: {2}\n\tactivation: {4}\n\tsigma: {5}\n\tlower: {6}"
-          "\tembeds: {3}".format(args.in_dim,args.h_dim,args.h_layers,args.embeds,activation, args.sigma, args.lower, args.c_in_dim), file=sys.stderr)
+    print("Info: biLSTM\n\tin_dim: {0}\n\tc_in_dim: {6}\n\th_dim: {1}"
+          "\n\th_layers: {2}\n\tactivation: {4}\n\tsigma: {5}\n"
+          "\tembeds: {3}".format(args.in_dim,args.h_dim,args.h_layers,args.embeds,activation, args.sigma, args.c_in_dim), file=sys.stderr)
 
     if args.save_embeds:
         tagger.save_embeds(args.save_embeds)
@@ -120,12 +113,11 @@ def load(args):
                       myparams["c_in_dim"],
                       myparams["h_layers"],
                       myparams["pred_layer"],
-                      activation=myparams["activation"], tasks_ids=myparams["tasks_ids"])
+                      activation=myparams["activation"])
     tagger.set_indices(myparams["w2i"],myparams["c2i"],myparams["task2tag2idx"])
     tagger.predictors, tagger.char_rnn, tagger.wembeds, tagger.cembeds = \
         tagger.build_computation_graph(myparams["num_words"],
                                        myparams["num_chars"])
-    #tagger.model.load(str.encode(args.model))
     tagger.model.load(args.model)
     print("model loaded: {}".format(args.model), file=sys.stderr)
     return tagger
@@ -136,10 +128,8 @@ def save(nntagger, args):
     """
     outdir = args.save
     modelname = outdir + ".model"
-    #nntagger.model.save(str.encode(modelname))  #python3 needs it as bytes - no longer!
     nntagger.model.save(modelname)
     import pickle
-    print(nntagger.task2tag2idx)
     myparams = {"num_words": len(nntagger.w2i),
                 "num_chars": len(nntagger.c2i),
                 "tasks_ids": nntagger.tasks_ids,
@@ -160,7 +150,7 @@ def save(nntagger, args):
 
 class SimpleBiltyTagger(object):
 
-    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,embeds_file=None,activation=dynet.tanh, lower=False, noise_sigma=0.1, tasks_ids=[]):
+    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,embeds_file=None,activation=dynet.tanh, noise_sigma=0.1):
         self.w2i = {}  # word to index mapping
         self.c2i = {}  # char to index mapping
         self.tag2idx = {} # tag to tag_id mapping
@@ -170,7 +160,6 @@ class SimpleBiltyTagger(object):
         self.h_dim = h_dim
         self.c_in_dim = c_in_dim
         self.activation = activation
-        self.lower = lower
         self.noise_sigma = noise_sigma
         self.h_layers = h_layers
         self.predictors = {"inner": [], "output_layers_dict": {}, "task_expected_at": {} } # the inner layers and predictors
@@ -239,12 +228,14 @@ class SimpleBiltyTagger(object):
         # initialize the word embeddings and the parameters
         if self.embeds_file:
             print("loading embeddings", file=sys.stderr)
-            embeddings, emb_dim = load_embeddings_file(self.embeds_file, lower=self.lower)
+            embeddings, emb_dim = load_embeddings_file(self.embeds_file)
             assert(emb_dim==self.in_dim)
             num_words=len(set(embeddings.keys()).union(set(self.w2i.keys()))) # initialize all with embeddings
             # init model parameters and initialize them
             wembeds = self.model.add_lookup_parameters((num_words, self.in_dim))
-            cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
+
+            if self.c_in_dim > 0:
+                cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
                
             init=0
             l = len(embeddings.keys())
@@ -260,17 +251,22 @@ class SimpleBiltyTagger(object):
 
         else:
             wembeds = self.model.add_lookup_parameters((num_words, self.in_dim))
-            cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
+            if self.c_in_dim > 0:
+                cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
+            else:
+                cembeds = None
                
 
         #make it more flexible to add number of layers as specified by parameter
         layers = [] # inner layers
-        #print("h_layers:", self.h_layers, file=sys.stderr)
+
         for layer_num in range(0,self.h_layers):
-            #print(">>>", layer_num, "layer_num")
 
             if layer_num == 0:
-                builder = dynet.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) # in_dim: size of each layer
+                if self.c_in_dim > 0:
+                    builder = dynet.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) # in_dim: size of each layer
+                else:
+                    builder = dynet.LSTMBuilder(1, self.in_dim, self.h_dim, self.model)
                 layers.append(BiRNNSequencePredictor(builder)) #returns forward and backward sequence
             else:
                 # add inner layers (if h_layers >1)
@@ -282,7 +278,10 @@ class SimpleBiltyTagger(object):
         task_num_labels= len(self.tag2idx)
         output_layer = FFSequencePredictor(Layer(self.model, self.h_dim*2, task_num_labels, dynet.softmax))
 
-        char_rnn = RNNSequencePredictor(dynet.LSTMBuilder(1, self.c_in_dim, self.c_in_dim, self.model))
+        if self.c_in_dim > 0:
+            char_rnn = RNNSequencePredictor(dynet.LSTMBuilder(1, self.c_in_dim, self.c_in_dim, self.model))
+        else:
+            char_rnn = None
 
         predictors = {}
         predictors["inner"] = layers
@@ -302,15 +301,16 @@ class SimpleBiltyTagger(object):
                 word_indices.append(self.w2i[word])
             else:
                 word_indices.append(self.w2i["_UNK"])
-                
-            chars_of_word = [self.c2i["<w>"]]
-            for char in word:
-                if char in self.c2i:
-                    chars_of_word.append(self.c2i[char])
-                else:
-                    chars_of_word.append(self.c2i["_UNK"])
-            chars_of_word.append(self.c2i["</w>"])
-            word_char_indices.append(chars_of_word)
+
+            if self.c_in_dim > 0:
+                chars_of_word = [self.c2i["<w>"]]
+                for char in word:
+                    if char in self.c2i:
+                        chars_of_word.append(self.c2i[char])
+                    else:
+                        chars_of_word.append(self.c2i["_UNK"])
+                chars_of_word.append(self.c2i["</w>"])
+                word_char_indices.append(chars_of_word)
         return word_indices, word_char_indices
                                                                                                                                 
 
@@ -340,16 +340,22 @@ class SimpleBiltyTagger(object):
 
         char_emb = []
         rev_char_emb = []
-        # get representation for words
-        for chars_of_token in char_indices:
-            # use last state as word representation
-            last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in chars_of_token])[-1]
-            rev_last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in reversed(chars_of_token)])[-1]
-            char_emb.append(last_state)
-            rev_char_emb.append(rev_last_state)
-            
+
         wfeatures = [self.wembeds[w] for w in word_indices]
-        features = [dynet.concatenate([w,c,rev_c]) for w,c,rev_c in zip(wfeatures,char_emb,reversed(rev_char_emb))]
+
+        if self.c_in_dim > 0:
+            # get representation for words
+            for chars_of_token in char_indices:
+                # use last state as word representation
+                last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in chars_of_token])[-1]
+                rev_last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in reversed(chars_of_token)])[-1]
+                char_emb.append(last_state)
+                rev_char_emb.append(rev_last_state)
+
+
+            features = [dynet.concatenate([w,c,rev_c]) for w,c,rev_c in zip(wfeatures,char_emb,reversed(rev_char_emb))]
+        else:
+            features = wfeatures
         
         if train: # only do at training time
             features = [dynet.noise(fe,self.noise_sigma) for fe in features]
@@ -403,8 +409,6 @@ class SimpleBiltyTagger(object):
 
 
 
-    # Get train data: need to read each train set (linked to a task) separately
-
     def get_train_data(self, train_data):
         """
         transform training data to features (word indices)
@@ -438,13 +442,14 @@ class SimpleBiltyTagger(object):
                     w2i[word] = len(w2i)
                 instance_word_indices.append(w2i[word])
 
-                chars_of_word = [c2i["<w>"]]
-                for char in word:
-                    if char not in c2i:
-                        c2i[char] = len(c2i)
-                    chars_of_word.append(c2i[char])
-                chars_of_word.append(c2i["</w>"])
-                instance_char_indices.append(chars_of_word)
+                if self.c_in_dim > 0:
+                    chars_of_word = [c2i["<w>"]]
+                    for char in word:
+                        if char not in c2i:
+                            c2i[char] = len(c2i)
+                        chars_of_word.append(c2i[char])
+                    chars_of_word.append(c2i["</w>"])
+                    instance_char_indices.append(chars_of_word)
 
                 if tag not in tag2idx:
                     tag2idx[tag]=len(tag2idx)
@@ -461,6 +466,8 @@ class SimpleBiltyTagger(object):
 
         print("%s sentences %s tokens" % (num_sentences, num_tokens), file=sys.stderr)
         print("%s w features, %s c features " % (len(w2i),len(c2i)), file=sys.stderr)
+        if self.c_in_dim == 0:
+            print("char features disabled", file=sys.stderr)
 
         assert(len(X)==len(Y))
 
@@ -470,11 +477,10 @@ class SimpleBiltyTagger(object):
         return X, Y
 
 
-
-
 class MyNNTaggerArgumentOptions(object):
     def __init__(self):
         pass
+
     ### functions for checking arguments
     def acfunct(arg):
         """ check for allowed argument for --ac option """
