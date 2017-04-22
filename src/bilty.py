@@ -138,9 +138,16 @@ def main():
             print("\ntask%s test accuracy on %s items: %.4f" % (i, i+1, correct/total), file=sys.stderr)
             print(("Task"+str(i)+" Done. Took {0:.2f} seconds.".format(time.time()-start)),file=sys.stderr)
             sys.stdout = stdout
-
-    print("Info: biLSTM\n\t"+"\n\t".join(["{}: {}".format(a,v) for a, v in vars(args).items()
-                                      if a not in ["train","test","dev","pred_layer"]]))
+    if args.train:
+        print("Info: biLSTM\n\t"+"\n\t".join(["{}: {}".format(a,v) for a, v in vars(args).items()
+                                          if a not in ["train","test","dev","pred_layer"]]))
+    else:
+        # print less when only testing, as not all train params are stored explicitly
+        print("Info: biLSTM\n\t" + "\n\t".join(["{}: {}".format(a, v) for a, v in vars(args).items()
+                                                if a not in ["train", "test", "dev", "pred_layer",
+                                                             "initializer","ac","word_dropout_rate",
+                                                             "patience","sigma","disable_backprob_embed",
+                                                             "trainer", "dynet_seed", "dynet_mem","iters"]]))
 
     if args.save_embeds:
         tagger.save_embeds(args.save_embeds)
