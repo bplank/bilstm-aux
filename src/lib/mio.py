@@ -48,7 +48,7 @@ def read_conll_file(file_name):
                     #tag = line.split("\t")[0]
                     #print(tag,file=sys.stderr)
                 else:
-                    print("erroneous line: {} (line number: {}) ".format(line, i), file=sys.stderr)
+                    print("erroneous line: {} (line number: {}) ".format(line), file=sys.stderr)
                     exit()
             else:
                 word, tag = line.split('\t')
@@ -71,13 +71,10 @@ if __name__=="__main__":
     allsents=[]
     unique_tokens=set()
     unique_tokens_lower=set()
-    for words, tags in read_conll_file("data/gimpel.train"):
+    for words, tags in read_conll_file("data/da-ud-train.conllu"):
         allsents.append(words)
         unique_tokens.update(words)
         unique_tokens_lower.update([w.lower() for w in words])
-    assert(len(allsents)==1002)
-    assert(len(unique_tokens)==4396)
-    assert(len(unique_tokens_lower)==3742)
-    #emb,l = load_embeddings_file("data/head_senna") #first 10 senna.txt emb
-    #assert(l==50)
-    #print(emb["#"])
+    assert(len(allsents)==4868)
+    assert(len(unique_tokens)==17552)
+
