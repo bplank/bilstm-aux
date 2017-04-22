@@ -118,6 +118,11 @@ def main():
             save(tagger, args.save)
 
     if args.test and len( args.test ) != 0:
+        if not args.model:
+            if not args.train:
+                print("specify a model!")
+                sys.exit()
+
         stdout = sys.stdout
         # One file per test ... 
         for i, test in enumerate( args.test ):
@@ -315,8 +320,6 @@ class NNTagger(object):
                         print('No improvement for %d epochs. Early stopping...' % epochs_no_improvement)
                         break
 
-
-
     def build_computation_graph(self, num_words, num_chars):
         """
         build graph and link to parameters
@@ -350,7 +353,7 @@ class NNTagger(object):
             cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim), init=self.initializer)
                
 
-        #make it more flexible to add number of layers as specified by parameter
+        # make it more flexible to add number of layers as specified by parameter
         layers = [] # inner layers
         output_layers_dict = {}   # from task_id to actual softmax predictor
         task_expected_at = {} # map task_id => output_layer_#
