@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-# coding=utf-8
+# -*- coding: utf-8 -*-
 """
 A neural network based tagger  (bi-LSTM)
+- hierarchical (word embeddings plus lower-level bi-LSTM for characters)
+- supports MTL
 :author: Barbara Plank
 """
 import argparse
@@ -31,6 +33,11 @@ TRAINER_MAP = {
             "adagrad": dynet.AdagradTrainer
            }
 
+ACTIVATION_MAP = {
+             "tanh": dynet.tanh,
+             "rectify": dynet.rectify
+           }
+
 def main():
     parser = argparse.ArgumentParser(description="""Run the NN tagger""")
     parser.add_argument("--train", nargs='*', help="train folder for each task") # allow multiple train files, each asociated with a task = position in the list
@@ -47,8 +54,9 @@ def main():
     parser.add_argument("--save", help="save model to file (appends .model as well as .pickle)", required=False,default=None)
     parser.add_argument("--embeds", help="word embeddings file", required=False, default=None)
     parser.add_argument("--sigma", help="noise sigma", required=False, default=0.2, type=float)
-    parser.add_argument("--ac", help="activation function [rectify, tanh, ...]", default="tanh", type=MyNNTaggerArgumentOptions.acfunct)
+    parser.add_argument("--ac", help="activation function [rectify, tanh, ...]", default="tanh", choices=ACTIVATION_MAP.keys())
     parser.add_argument("--trainer", help="trainer [default: sgd]", required=False, choices=TRAINER_MAP.keys(), default="sgd")
+    parser.add_argument("--patience", help="patience [default: -1=not used], requires specification of a dev set with --dev", required=False, default=-1, type=int)
     parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0=disabled], recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0, type=float)
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
@@ -77,6 +85,7 @@ def main():
             modeldir = os.path.dirname(args.save)
             if not os.path.exists(modeldir):
                 os.makedirs(modeldir)
+
     if args.output:
         if os.path.isdir(args.output):
             outdir = os.path.dirname(args.output)
@@ -95,16 +104,18 @@ def main():
                               args.h_layers,
                               args.pred_layer,
                               embeds_file=args.embeds,
-                              activation=args.ac,
+                              activation=ACTIVATION_MAP[args.ac],
                               noise_sigma=args.sigma,
                               backprob_embeds=args.disable_backprob_embeds,
                               initializer=INITIALIZER_MAP[args.initializer]
                           )
 
     if args.train and len( args.train ) != 0:
-        tagger.fit(args.train, args.iters, TRAINER_MAP[args.trainer], dev=args.dev, word_dropout_rate=args.word_dropout_rate)
+        tagger.fit(args.train, args.iters, TRAINER_MAP[args.trainer],
+                   dev=args.dev, word_dropout_rate=args.word_dropout_rate,
+                   model_path=args.save, patience=args.patience)
         if args.save:
-            save(tagger, args)
+            save(tagger, args.save)
 
     if args.test and len( args.test ) != 0:
         stdout = sys.stdout
@@ -121,19 +132,14 @@ def main():
 
             print("\ntask%s test accuracy on %s items: %.4f" % (i, i+1, correct/total), file=sys.stderr)
             print(("Task"+str(i)+" Done. Took {0:.2f} seconds.".format(time.time()-start)),file=sys.stderr)
-            sys.stdout = stdout 
-
-
-    if args.ac:
-        activation=args.ac.__name__
-    else:
-        activation="None"
+            sys.stdout = stdout
 
     print("Info: biLSTM\n\t"+"\n\t".join(["{}: {}".format(a,v) for a, v in vars(args).items()
                                       if a not in ["train","test","dev","pred_layer"]]))
 
     if args.save_embeds:
         tagger.save_embeds(args.save_embeds)
+
 
 def load(args):
     """
@@ -156,15 +162,13 @@ def load(args):
     print("model loaded: {}".format(args.model), file=sys.stderr)
     return tagger
 
-def save(nntagger, args):
+
+def save(nntagger, model_path):
     """
     save a model; dynet only saves the parameters, need to store the rest separately
     """
-    outdir = args.save
-    modelname = outdir + ".model"
-    #nntagger.model.save(str.encode(modelname))  #python3 needs it as bytes - no longer!
+    modelname = model_path + ".model"
     nntagger.model.save(modelname)
-    import pickle
     myparams = {"num_words": len(nntagger.w2i),
                 "num_chars": len(nntagger.c2i),
                 "tasks_ids": nntagger.tasks_ids,
@@ -185,7 +189,7 @@ def save(nntagger, args):
 
 class NNTagger(object):
 
-    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=dynet.tanh,backprob_embeds=True,noise_sigma=0.1, tasks_ids=[],initializer=INITIALIZER_MAP["glorot"]):
+    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=ACTIVATION_MAP["tanh"],backprob_embeds=True,noise_sigma=0.1, tasks_ids=[],initializer=INITIALIZER_MAP["glorot"]):
         self.w2i = {}  # word to index mapping
         self.c2i = {}  # char to index mapping
         self.tasks_ids = tasks_ids # list of names for each task
@@ -216,7 +220,7 @@ class NNTagger(object):
         self.w2i = w2i
         self.c2i = c2i
 
-    def fit(self, list_folders_name, num_iterations, train_algo, dev=None, word_dropout_rate=0.0):
+    def fit(self, list_folders_name, num_iterations, train_algo, dev=None, word_dropout_rate=0.0, model_path=None, patience=0):
         """
         train the tagger
         """
@@ -258,13 +262,14 @@ class NNTagger(object):
             print(">>> disable wembeds update <<< (is updated: {})".format(self.wembeds.is_updated()), file=sys.stderr)
 
 
-        #if train_algo == "sgd":
-        #    trainer = dynet.SimpleSGDTrainer(self.model)
-        #elif train_algo == "adam":
-        #    trainer = dynet.AdamTrainer(self.model)
         trainer = train_algo(self.model)
 
         train_data = list(zip(train_X,train_Y, task_labels))
+
+        best_val_acc, epochs_no_improvement = 0.0, 0
+
+        if dev and model_path is not None and patience > 0:
+            print('Using early stopping with patience of %d...' % patience)
 
         for iter in range(num_iterations):
             total_loss=0.0
@@ -294,7 +299,21 @@ class NNTagger(object):
             if dev:
                 # evaluate after every epoch
                 correct, total = self.evaluate(dev_X, dev_Y, org_X, org_Y, dev_task_labels)
-                print("\ndev accuracy: %.4f" % (correct/total), file=sys.stderr)
+                val_accuracy = correct/total
+                print("\ndev accuracy: %.4f" % (val_accuracy), file=sys.stderr)
+
+                if model_path is not None:
+                    if val_accuracy > best_val_acc:
+                        print('Accuracy %.4f is better than best val accuracy %.4f.' % (val_accuracy, best_val_acc))
+                        best_val_acc = val_accuracy
+                        epochs_no_improvement = 0
+                        save(self, model_path)
+                    else:
+                        print('Accuracy %.4f is worse than best val loss %.4f.' % (val_accuracy, best_val_acc))
+                        epochs_no_improvement += 1
+                    if epochs_no_improvement == patience:
+                        print('No improvement for %d epochs. Early stopping...' % epochs_no_improvement)
+                        break
 
 
 
@@ -481,7 +500,7 @@ class NNTagger(object):
 
         if output_predictions != None:
             i2w = {self.w2i[w] : w for w in self.w2i.keys()}
-            task_id = task_labels[0] #get first
+            task_id = task_labels[0] # get first
             i2t = {self.task2tag2idx[task_id][t] : t for t in self.task2tag2idx[task_id].keys()}
 
         for i, ((word_indices, word_char_indices), gold_tag_indices, task_of_instance) in enumerate(zip(test_X, test_Y, task_labels)):
@@ -508,11 +527,10 @@ class NNTagger(object):
         return correct, total
 
 
-
-    # Get train data: need to read each train set (linked to a task) separately
-
     def get_train_data(self, list_folders_name):
         """
+        Get train data: read each train set (linked to a task)
+
         :param list_folders_name: list of folders names
 
         transform training data to features (word indices)
@@ -520,11 +538,8 @@ class NNTagger(object):
         """
         X = []
         Y = []
-        task_labels = [] #keeps track of where instances come from "task1" or "task2"..
-        self.tasks_ids = [] #record the id of the tasks
-
-        #num_sentences=0
-        #num_tokens=0
+        task_labels = [] # keeps track of where instances come from "task1" or "task2"..
+        self.tasks_ids = [] # record ids of the tasks
 
         # word 2 indices and tag 2 indices
         w2i = {} # word to index
@@ -568,7 +583,6 @@ class NNTagger(object):
                         instance_char_indices.append(chars_of_word)
                             
                     if tag not in task2tag2idx[task_id]:
-                        #tag2idx[tag]=len(tag2idx)
                         task2tag2idx[task_id][tag]=len(task2tag2idx[task_id])
 
                     instance_tags_indices.append(task2tag2idx[task_id].get(tag))
@@ -577,10 +591,9 @@ class NNTagger(object):
                 Y.append(instance_tags_indices)
                 task_labels.append(task_id)
 
-            #self.num_labels[task_id] = len( task2tag2idx[task_id] )
-
             if num_sentences == 0 or num_tokens == 0:
                 sys.exit( "No data read from: "+folder_name )
+
             print("TASK "+task_id+" "+folder_name, file=sys.stderr )
             print("%s sentences %s tokens" % (num_sentences, num_tokens), file=sys.stderr)
             print("%s w features, %s c features " % (len(w2i),len(c2i)), file=sys.stderr)
@@ -603,22 +616,6 @@ class NNTagger(object):
             word = i2w[word_id]
             OUT.write("{} {}\n".format(word," ".join([str(x) for x in wembeds_expression.npvalue()])))
         OUT.close()
-
-
-class MyNNTaggerArgumentOptions(object):
-    def __init__(self):
-        pass
-    ### functions for checking arguments
-    def acfunct(arg):
-        """ check for allowed argument for --ac option """
-        try:
-            functions = [dynet.rectify, dynet.tanh]
-            functions = { function.__name__ : function for function in functions}
-            functions["None"] = None
-            return functions[str(arg)]
-        except:
-            raise argparse.ArgumentTypeError("String {} does not match required format".format(arg,))
-
 
 
 if __name__=="__main__":
