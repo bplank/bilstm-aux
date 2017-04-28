@@ -30,8 +30,8 @@ def main():
     parser.add_argument("--c_in_dim", help="input dimension for character embeddings; if set to 0 disable lower-level char lstm [default: 100]", required=False,type=int,default=100)
     parser.add_argument("--h_dim", help="hidden dimension [default: 100]", required=False,type=int,default=100)
     parser.add_argument("--h_layers", help="number of stacked LSTMs [default: 1 = no stacking]", required=False,type=int,default=1)
-    parser.add_argument("--test", nargs='*', help="test file(s)", required=False)
-    parser.add_argument("--dev", help="dev file(s)", required=False) 
+    parser.add_argument("--test", help="test file", required=False)
+    parser.add_argument("--dev", help="dev file(s)", required=False)
     parser.add_argument("--save", help="save model to file (appends .model as well as .pickle)", required=False,default=None)
     parser.add_argument("--embeds", help="word embeddings file", required=False, default=None)
     parser.add_argument("--sigma", help="noise sigma", required=False, default=0.2, type=float)
@@ -77,20 +77,17 @@ def main():
         if args.save:
             save(tagger, args)
 
-    if args.test and len( args.test ) != 0:
+    if args.test:
         stdout = sys.stdout
-        # One file per test ... 
-        for i, test in enumerate( args.test ):
 
-            sys.stderr.write('\nTesting\n')
-            sys.stderr.write('*******\n')
-            test_X, test_Y = tagger.get_data_as_indices(test)
-            correct, total = tagger.evaluate(test_X, test_Y)
+        sys.stderr.write('\nTesting\n')
+        sys.stderr.write('*******\n')
+        test_X, test_Y = tagger.get_data_as_indices(args.test)
+        correct, total = tagger.evaluate(test_X, test_Y)
 
-            print("\ntask%s test accuracy on %s items: %.4f" % (i, i+1, correct/total), file=sys.stderr)
-            print(("Task"+str(i)+" Done. Took {0:.2f} seconds.".format(time.time()-start)),file=sys.stderr)
-            sys.stdout = stdout 
-
+        print("\ntest accuracy: %.4f" % (correct/total), file=sys.stderr)
+        print(("Done. Took {0:.2f} seconds.".format(time.time()-start)),file=sys.stderr)
+        sys.stdout = stdout
 
     if args.ac:
         activation=args.ac.__name__
@@ -112,9 +109,8 @@ def load(args):
                       myparams["h_dim"],
                       myparams["c_in_dim"],
                       myparams["h_layers"],
-                      myparams["pred_layer"],
                       activation=myparams["activation"])
-    tagger.set_indices(myparams["w2i"],myparams["c2i"],myparams["task2tag2idx"])
+    tagger.set_indices(myparams["w2i"],myparams["c2i"],myparams["tag2idx"])
     tagger.predictors, tagger.char_rnn, tagger.wembeds, tagger.cembeds = \
         tagger.build_computation_graph(myparams["num_words"],
                                        myparams["num_chars"])
@@ -132,17 +128,14 @@ def save(nntagger, args):
     import pickle
     myparams = {"num_words": len(nntagger.w2i),
                 "num_chars": len(nntagger.c2i),
-                "tasks_ids": nntagger.tasks_ids,
                 "w2i": nntagger.w2i,
                 "c2i": nntagger.c2i,
-                "task2tag2idx": nntagger.task2tag2idx,
+                "tag2idx": nntagger.tag2idx,
                 "activation": nntagger.activation,
                 "in_dim": nntagger.in_dim,
                 "h_dim": nntagger.h_dim,
                 "c_in_dim": nntagger.c_in_dim,
-                "h_layers": nntagger.h_layers,
-                "embeds_file": nntagger.embeds_file,
-                "pred_layer": nntagger.pred_layer
+                "h_layers": nntagger.h_layers
                 }
     pickle.dump(myparams, open( modelname+".pickle", "wb" ) )
     print("model stored: {}".format(modelname), file=sys.stderr)
@@ -154,7 +147,6 @@ class SimpleBiltyTagger(object):
         self.w2i = {}  # word to index mapping
         self.c2i = {}  # char to index mapping
         self.tag2idx = {} # tag to tag_id mapping
-        self.pred_layer = 1 # at which layer to predict
         self.model = dynet.Model() #init model
         self.in_dim = in_dim
         self.h_dim = h_dim
@@ -226,6 +218,7 @@ class SimpleBiltyTagger(object):
         build graph and link to parameters
         """
         # initialize the word embeddings and the parameters
+        cembeds = None
         if self.embeds_file:
             print("loading embeddings", file=sys.stderr)
             embeddings, emb_dim = load_embeddings_file(self.embeds_file)
@@ -253,9 +246,6 @@ class SimpleBiltyTagger(object):
             wembeds = self.model.add_lookup_parameters((num_words, self.in_dim))
             if self.c_in_dim > 0:
                 cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
-            else:
-                cembeds = None
-               
 
         #make it more flexible to add number of layers as specified by parameter
         layers = [] # inner layers
