@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# coding=utf-8
 """
 A neural network based tagger  (bi-LSTM)
 - hierarchical (word embeddings plus lower-level bi-LSTM for characters)
@@ -14,6 +14,7 @@ import numpy as np
 import os
 import pickle
 import dynet
+import codecs
 from collections import Counter
 from lib.mnnl import FFSequencePredictor, Layer, RNNSequencePredictor, BiRNNSequencePredictor
 from lib.mio import read_conll_file, load_embeddings_file
@@ -49,6 +50,7 @@ def main():
     parser.add_argument("--h_dim", help="hidden dimension [default: 100]", required=False,type=int,default=100)
     parser.add_argument("--h_layers", help="number of stacked LSTMs [default: 1 = no stacking]", required=False,type=int,default=1)
     parser.add_argument("--test", nargs='*', help="test file(s)", required=False) # should be in the same order/task as train
+    parser.add_argument("--raw", help="if test file is in raw format (one sentence per line)", required=False, action="store_true", default=False)
     parser.add_argument("--dev", help="dev file(s)", required=False) 
     parser.add_argument("--output", help="output predictions to file", required=False,default=None)
     parser.add_argument("--save", help="save model to file (appends .model as well as .pickle)", required=False,default=None)
@@ -126,17 +128,20 @@ def main():
         stdout = sys.stdout
         # One file per test ... 
         for i, test in enumerate( args.test ):
+
             if args.output != None:
                 file_pred = args.output+".task"+str(i)
-                sys.stdout = open(file_pred, 'w')
+                sys.stdout = codecs.open(file_pred, 'w', encoding='utf-8')
 
             sys.stderr.write('\nTesting Task'+str(i)+'\n')
             sys.stderr.write('*******\n')
-            test_X, test_Y, org_X, org_Y, task_labels = tagger.get_data_as_indices(test, "task"+str(i))
-            correct, total = tagger.evaluate(test_X, test_Y, org_X, org_Y, task_labels, output_predictions=args.output)
+            test_X, test_Y, org_X, org_Y, task_labels = tagger.get_data_as_indices(test, "task"+str(i), raw=args.raw)
+            correct, total = tagger.evaluate(test_X, test_Y, org_X, org_Y, task_labels,
+                                             output_predictions=args.output, raw=args.raw)
 
-            print("\ntask%s test accuracy on %s items: %.4f" % (i, i+1, correct/total), file=sys.stderr)
-            print(("Task"+str(i)+" Done. Took {0:.2f} seconds.".format(time.time()-start)),file=sys.stderr)
+            if not args.raw:
+                print("\nTask%s test accuracy on %s items: %.4f" % (i, i+1, correct/total), file=sys.stderr)
+            print(("Done. Took {0:.2f} seconds.".format(time.time()-start)),file=sys.stderr)
             sys.stdout = stdout
     if args.train:
         print("Info: biLSTM\n\t"+"\n\t".join(["{}: {}".format(a,v) for a, v in vars(args).items()
@@ -316,15 +321,15 @@ class NNTagger(object):
 
                 if model_path is not None:
                     if val_accuracy > best_val_acc:
-                        print('Accuracy %.4f is better than best val accuracy %.4f.' % (val_accuracy, best_val_acc))
+                        print('Accuracy %.4f is better than best val accuracy %.4f.' % (val_accuracy, best_val_acc), file=sys.stderr)
                         best_val_acc = val_accuracy
                         epochs_no_improvement = 0
                         save(self, model_path)
                     else:
-                        print('Accuracy %.4f is worse than best val loss %.4f.' % (val_accuracy, best_val_acc))
+                        print('Accuracy %.4f is worse than best val loss %.4f.' % (val_accuracy, best_val_acc), file=sys.stderr)
                         epochs_no_improvement += 1
                     if epochs_no_improvement == patience:
-                        print('No improvement for %d epochs. Early stopping...' % epochs_no_improvement)
+                        print('No improvement for %d epochs. Early stopping...' % epochs_no_improvement, file=sys.stderr)
                         break
 
     def build_computation_graph(self, num_words, num_chars):
@@ -423,7 +428,7 @@ class NNTagger(object):
         return word_indices, word_char_indices
                                                                                                                                 
 
-    def get_data_as_indices(self, folder_name, task):
+    def get_data_as_indices(self, folder_name, task, raw=False):
         """
         X = list of (word_indices, word_char_indices)
         Y = list of tag indices
@@ -431,7 +436,7 @@ class NNTagger(object):
         X, Y = [],[]
         org_X, org_Y = [], []
         task_labels = []
-        for (words, tags) in read_conll_file(folder_name):
+        for (words, tags) in read_conll_file(folder_name, raw=raw):
             word_indices, word_char_indices = self.get_features(words)
             tag_indices = [self.task2tag2idx[task].get(tag) for tag in tags]
             X.append((word_indices,word_char_indices))
@@ -501,7 +506,7 @@ class NNTagger(object):
         raise Exception("oops should not be here")
         return None
 
-    def evaluate(self, test_X, test_Y, org_X, org_Y, task_labels, output_predictions=None, verbose=True):
+    def evaluate(self, test_X, test_Y, org_X, org_Y, task_labels, output_predictions=None, verbose=True, raw=False):
         """
         compute accuracy on a test file
         """
@@ -529,7 +534,10 @@ class NNTagger(object):
                 gold = org_Y[i]
 
                 for w,g,p in zip(words,gold,prediction):
-                    print(("{}\t{}\t{}".format(w,g,p)))
+                    if raw:
+                        print(u"{}\t{}".format(w, p)) # do not print DUMMY tag when --raw is on
+                    else:
+                        print(u"{}\t{}\t{}".format(w, g, p))
                 print("")
             correct += sum([1 for (predicted, gold) in zip(predicted_tag_indices, gold_tag_indices) if predicted == gold])
             total += len(gold_tag_indices)

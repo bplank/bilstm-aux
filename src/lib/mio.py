@@ -21,7 +21,7 @@ def load_embeddings_file(file_name, sep=" ",lower=False):
     print("loaded pre-trained embeddings (word->emb_vec) size: {} (lower: {})".format(len(emb.keys()), lower))
     return emb, len(emb[word])
 
-def read_conll_file(file_name):
+def read_conll_file(file_name, raw=False):
     """
     read in conll file
     word1    tag1
@@ -31,6 +31,7 @@ def read_conll_file(file_name):
     Sentences MUST be separated by newlines!
 
     :param file_name: file to read in
+    :param raw: if raw text file (with one sentence per line) -- adds 'DUMMY' label
     :return: generator of instances ((list of  words, list of tags) pairs)
 
     """
@@ -41,31 +42,33 @@ def read_conll_file(file_name):
         line = line.strip()
 
         if line:
-            if len(line.split("\t")) != 2:
-                if len(line.split("\t")) == 1: # emtpy words in gimpel
-                    raise IOError("Issue with input file - doesn't have a tag or token?")
-                    #word = "|"
-                    #tag = line.split("\t")[0]
-                    #print(tag,file=sys.stderr)
-                else:
-                    print("erroneous line: {} (line number: {}) ".format(line), file=sys.stderr)
-                    exit()
+            if raw:
+                current_words = line.split() ## simple splitting by space
+                current_tags = ['DUMMY' for _ in current_words]
+                yield (current_words, current_tags)
+
             else:
-                word, tag = line.split('\t')
-            current_words.append(word)
-            current_tags.append(tag)
+                if len(line.split("\t")) != 2:
+                    if len(line.split("\t")) == 1: # emtpy words in gimpel
+                        raise IOError("Issue with input file - doesn't have a tag or token?")
+                    else:
+                        print("erroneous line: {} (line number: {}) ".format(line), file=sys.stderr)
+                        exit()
+                else:
+                    word, tag = line.split('\t')
+                current_words.append(word)
+                current_tags.append(tag)
 
         else:
-            if current_words: #skip emtpy lines
+            if current_words and not raw: #skip emtpy lines
                 yield (current_words, current_tags)
             current_words = []
             current_tags = []
 
-        
     # check for last one
-    if current_tags != []:
+    if current_tags != [] and not raw:
         yield (current_words, current_tags)
-            
+
     
 if __name__=="__main__":
     allsents=[]
