@@ -343,7 +343,7 @@ class NNTagger(object):
             assert(emb_dim==self.in_dim)
             num_words=len(set(embeddings.keys()).union(set(self.w2i.keys()))) # initialize all with embeddings
             # init model parameters and initialize them
-            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim))
+            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim), init=self.initializer)
 
             init=0
             l = len(embeddings.keys())
