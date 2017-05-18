@@ -41,11 +41,11 @@ class BiRNNSequencePredictor(SequencePredictor):
     def __init__(self, lstm_builder):
         # use single one
         self.builder = lstm_builder
-    def predict_sequence(self, inputs):
+    def predict_sequence(self, f_inputs, b_inputs):
         f_init = self.builder.initial_state()
         b_init = self.builder.initial_state()
-        forward_sequence = [x.output() for x in f_init.add_inputs(inputs)]
-        backward_sequence = [x.output() for x in b_init.add_inputs(reversed(inputs))]
+        forward_sequence = [x.output() for x in f_init.add_inputs(f_inputs)]
+        backward_sequence = [x.output() for x in b_init.add_inputs(reversed(b_inputs))]
         return forward_sequence, backward_sequence  # do concat only later! return separate forward and backward seq
         
 class Layer:

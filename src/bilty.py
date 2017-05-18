@@ -59,12 +59,12 @@ def main():
     parser.add_argument("--ac", help="activation function [rectify, tanh, ...]", default="tanh", choices=ACTIVATION_MAP.keys())
     parser.add_argument("--trainer", help="trainer [default: sgd]", required=False, choices=TRAINER_MAP.keys(), default="sgd")
     parser.add_argument("--patience", help="patience [default: -1=not used], requires specification of a dev set with --dev", required=False, default=-1, type=int)
-    parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0=disabled], recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0, type=float)
+    parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0.25], if 0=disabled, recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0, type=float)
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--save-embeds", help="save word embeddings file", required=False, default=None)
     parser.add_argument("--disable-backprob-embeds", help="disable backprob into embeddings (default is to update)", required=False, action="store_false", default=True)
-    parser.add_argument("--initializer", help="initializer for embeddings (default: glorot)", choices=INITIALIZER_MAP.keys(), default="glorot")
+    parser.add_argument("--initializer", help="initializer for embeddings (default: constant)", choices=INITIALIZER_MAP.keys(), default="constant")
 
     args = parser.parse_args()
 
@@ -481,11 +481,12 @@ class NNTagger(object):
         # go through layers
         # input is now combination of w + char emb
         prev = features
+        prev_rev = features
         num_layers = self.h_layers
 
         for i in range(0,num_layers):
             predictor = self.predictors["inner"][i]
-            forward_sequence, backward_sequence = predictor.predict_sequence(prev)        
+            forward_sequence, backward_sequence = predictor.predict_sequence(prev, prev_rev)        
             if i > 0 and self.activation:
                 # activation between LSTM layers
                 forward_sequence = [self.activation(s) for s in forward_sequence]
