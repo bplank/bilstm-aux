@@ -225,10 +225,10 @@ class SimpleBiltyTagger(object):
             assert(emb_dim==self.in_dim)
             num_words=len(set(embeddings.keys()).union(set(self.w2i.keys()))) # initialize all with embeddings
             # init model parameters and initialize them
-            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim))
+            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim),init=dynet.ConstInitializer(0.01))
 
             if self.c_in_dim > 0:
-                cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
+                cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim),init=dynet.ConstInitializer(0.01))
                
             init=0
             l = len(embeddings.keys())
@@ -243,9 +243,9 @@ class SimpleBiltyTagger(object):
             print("initialized: {}".format(init), file=sys.stderr)
 
         else:
-            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim))
+            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim),init=dynet.ConstInitializer(0.01))
             if self.c_in_dim > 0:
-                cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim))
+                cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim),init=dynet.ConstInitializer(0.01))
 
         #make it more flexible to add number of layers as specified by parameter
         layers = [] # inner layers
@@ -356,10 +356,11 @@ class SimpleBiltyTagger(object):
         # go through layers
         # input is now combination of w + char emb
         prev = features
+        prev_rev = features
         num_layers = self.h_layers
         for i in range(0,num_layers):
             predictor = self.predictors["inner"][i]
-            forward_sequence, backward_sequence = predictor.predict_sequence(prev)        
+            forward_sequence, backward_sequence = predictor.predict_sequence(prev, prev_rev)
             if i > 0 and self.activation:
                 # activation between LSTM layers
                 forward_sequence = [self.activation(s) for s in forward_sequence]
@@ -375,7 +376,7 @@ class SimpleBiltyTagger(object):
                 return output
 
             prev = forward_sequence
-            prev_rev = backward_sequence # not used
+            prev_rev = backward_sequence
 
         raise Exception("oops should not be here")
         return None
