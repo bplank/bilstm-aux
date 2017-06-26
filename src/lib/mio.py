@@ -39,7 +39,8 @@ def read_conll_file(file_name, raw=False):
     current_tags = []
     
     for line in codecs.open(file_name, encoding='utf-8'):
-        line = line.strip()
+        #line = line.strip()
+        line = line[:-1]
 
         if line:
             if raw:
