@@ -336,7 +336,7 @@ class NNTagger(object):
                                         else w for w in word_indices]
 
                 if minibatch_size > 1:
-                    # use same predict function for training and testing
+                    # accumulate instances for minibatch update
                     output = self.predict(word_indices, char_indices, task_of_instance, train=True)
                     total_tagged += len(word_indices)
 
@@ -351,7 +351,6 @@ class NNTagger(object):
                         batch = []
                 else:
                     dynet.renew_cg() # new graph per item
-                    # use same predict function for training and testing
                     output = self.predict(word_indices, char_indices, task_of_instance, train=True)
                     total_tagged += len(word_indices)
 
