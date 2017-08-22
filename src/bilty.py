@@ -31,7 +31,8 @@ TRAINER_MAP = {
             "sgd": dynet.SimpleSGDTrainer,
             "adam": dynet.AdamTrainer,
             "adadelta": dynet.AdadeltaTrainer,
-            "adagrad": dynet.AdagradTrainer
+            "adagrad": dynet.AdagradTrainer,
+            "momentum": dynet.MomentumSGDTrainer
            }
 
 ACTIVATION_MAP = {
@@ -380,15 +381,18 @@ class NNTagger(object):
         for layer_num in range(0,self.h_layers):
             if layer_num == 0:
                 if self.c_in_dim > 0:
-                    builder = dynet.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) # in_dim: size of each layer
+                    f_builder = dynet.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) # in_dim: size of each layer
+                    b_builder = dynet.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
                 else:
-                    builder = dynet.LSTMBuilder(1, self.in_dim, self.h_dim, self.model)
+                    f_builder = dynet.LSTMBuilder(1, self.in_dim, self.h_dim, self.model)
+                    b_builder = dynet.LSTMBuilder(1, self.in_dim, self.h_dim, self.model)
 
-                layers.append(BiRNNSequencePredictor(builder)) #returns forward and backward sequence
+                layers.append(BiRNNSequencePredictor(f_builder, b_builder)) #returns forward and backward sequence
             else:
                 # add inner layers (if h_layers >1)
-                builder = dynet.LSTMBuilder(1, self.h_dim, self.h_dim, self.model)
-                layers.append(BiRNNSequencePredictor(builder))
+                f_builder = dynet.LSTMBuilder(1, self.h_dim, self.h_dim, self.model)
+                b_builder = dynet.LSTMBuilder(1, self.h_dim, self.h_dim, self.model)
+                layers.append(BiRNNSequencePredictor(f_builder, b_builder))
 
         # store at which layer to predict task
         for task_id in self.tasks_ids:
