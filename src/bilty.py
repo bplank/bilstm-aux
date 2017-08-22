@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# coding=utf-8
+# -*- coding: utf-8 -*-
 """
-A neural network based tagger  (bi-LSTM)
+A neural network based tagger (bi-LSTM)
 - hierarchical (word embeddings plus lower-level bi-LSTM for characters)
 - supports MTL
 :author: Barbara Plank
@@ -40,6 +40,13 @@ ACTIVATION_MAP = {
              "rectify": dynet.rectify
            }
 
+BUILDERS = {
+            "lstm": dynet.LSTMBuilder, # is dynet.VanillaLSTMBuilder (cf. https://github.com/clab/dynet/issues/474)
+            "lstmc": dynet.CoupledLSTMBuilder,
+            "gru": dynet.GRUBuilder,
+            "rnn": dynet.SimpleRNNBuilder
+           }
+
 def main():
     parser = argparse.ArgumentParser(description="""Run the NN tagger""")
     parser.add_argument("--train", nargs='*', help="train folder for each task") # allow multiple train files, each asociated with a task = position in the list
@@ -58,14 +65,24 @@ def main():
     parser.add_argument("--embeds", help="word embeddings file", required=False, default=None)
     parser.add_argument("--sigma", help="noise sigma", required=False, default=0.2, type=float)
     parser.add_argument("--ac", help="activation function [rectify, tanh, ...]", default="tanh", choices=ACTIVATION_MAP.keys())
+    parser.add_argument("--mlp", help="use MLP layer of this dimension [default 0=disabled]", required=False, default=0, type=int)
+    parser.add_argument("--ac-mlp", help="activation function for MLP (if used) [rectify, tanh, ...]", default="rectify", choices=ACTIVATION_MAP.keys())
     parser.add_argument("--trainer", help="trainer [default: sgd]", required=False, choices=TRAINER_MAP.keys(), default="sgd")
+    parser.add_argument("--learning-rate", help="learning rate", default=0.1, type=float) # see: http://dynet.readthedocs.io/en/latest/optimizers.html
     parser.add_argument("--patience", help="patience [default: -1=not used], requires specification of a dev set with --dev", required=False, default=-1, type=int)
-    parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0], if 0=disabled, recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0, type=float)
+    parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0.25], if 0=disabled, recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0.25, type=float)
+
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
+    parser.add_argument("--dynet-gpus", help="1 for GPU usage", default=0, type=int) # warning: non-deterministic results on GPU https://github.com/clab/dynet/issues/399
+#    parser.add_argument("--dynet-devices", help="specify CPU/GPU [CPU, GPU:1..]", default="CPU", type=str) # not yet fully supported in python binding https://github.com/clab/dynet/issues/804
+    parser.add_argument("--dynet-autobatch", help="if 1 enable autobatching", default=0, type=int)
+    parser.add_argument("--minibatch-size", help="size of minibatch for autobatching (1=disabled)", default=1, type=int)
+
     parser.add_argument("--save-embeds", help="save word embeddings file", required=False, default=None)
     parser.add_argument("--disable-backprob-embeds", help="disable backprob into embeddings (default is to update)", required=False, action="store_false", default=True)
     parser.add_argument("--initializer", help="initializer for embeddings (default: constant)", choices=INITIALIZER_MAP.keys(), default="constant")
+    parser.add_argument("--builder", help="RNN builder (default: lstmc)", choices=BUILDERS.keys(), default="lstmc")
 
     args = parser.parse_args()
 
@@ -81,6 +98,9 @@ def main():
 
     if args.c_in_dim == 0:
         print(">>> disable character embeddings <<<", file=sys.stderr)
+
+    if args.minibatch_size > 1:
+        print(">>> using minibatch_size {} <<<".format(args.minibatch_size))
 
     if args.save:
         # check if folder exists
@@ -108,15 +128,18 @@ def main():
                               args.pred_layer,
                               embeds_file=args.embeds,
                               activation=ACTIVATION_MAP[args.ac],
+                              mlp=args.mlp,
+                              activation_mlp=ACTIVATION_MAP[args.ac_mlp],
                               noise_sigma=args.sigma,
                               backprob_embeds=args.disable_backprob_embeds,
-                              initializer=INITIALIZER_MAP[args.initializer]
+                              initializer=INITIALIZER_MAP[args.initializer],
+                              builder=BUILDERS[args.builder]
                           )
 
     if args.train and len( args.train ) != 0:
         tagger.fit(args.train, args.iters, TRAINER_MAP[args.trainer],
                    dev=args.dev, word_dropout_rate=args.word_dropout_rate,
-                   model_path=args.save, patience=args.patience)
+                   model_path=args.save, patience=args.patience, minibatch_size=args.minibatch_size)
         if args.save:
             save(tagger, args.save)
 
@@ -170,13 +193,16 @@ def load(args):
                       myparams["h_layers"],
                       myparams["pred_layer"],
                       activation=myparams["activation"],
+                      mlp=myparams["mlp"],
+                      activation_mlp=myparams["activation_mlp"],
                       tasks_ids=myparams["tasks_ids"],
+                      builder=myparams["builder"],
                       )
     tagger.set_indices(myparams["w2i"],myparams["c2i"],myparams["task2tag2idx"])
     tagger.predictors, tagger.char_rnn, tagger.wembeds, tagger.cembeds = \
         tagger.build_computation_graph(myparams["num_words"],
                                        myparams["num_chars"])
-    tagger.model.load(args.model)
+    tagger.model.populate(args.model)
     print("model loaded: {}".format(args.model), file=sys.stderr)
     return tagger
 
@@ -194,12 +220,15 @@ def save(nntagger, model_path):
                 "c2i": nntagger.c2i,
                 "task2tag2idx": nntagger.task2tag2idx,
                 "activation": nntagger.activation,
+                "mlp": nntagger.mlp,
+                "activation_mlp": nntagger.activation_mlp,
                 "in_dim": nntagger.in_dim,
                 "h_dim": nntagger.h_dim,
                 "c_in_dim": nntagger.c_in_dim,
                 "h_layers": nntagger.h_layers,
                 "embeds_file": nntagger.embeds_file,
                 "pred_layer": nntagger.pred_layer,
+                "builder": nntagger.builder,
                 }
     pickle.dump(myparams, open( modelname+".pickle", "wb" ) )
     print("model stored: {}".format(modelname), file=sys.stderr)
@@ -207,17 +236,20 @@ def save(nntagger, model_path):
 
 class NNTagger(object):
 
-    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=ACTIVATION_MAP["tanh"],backprob_embeds=True,noise_sigma=0.1, tasks_ids=[],initializer=INITIALIZER_MAP["glorot"]):
+    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=ACTIVATION_MAP["tanh"],mlp=0,activation_mlp=ACTIVATION_MAP["rectify"],
+                 backprob_embeds=True,noise_sigma=0.1, tasks_ids=[],initializer=INITIALIZER_MAP["glorot"], builder=BUILDERS["lstmc"]):
         self.w2i = {}  # word to index mapping
         self.c2i = {}  # char to index mapping
         self.tasks_ids = tasks_ids # list of names for each task
         self.task2tag2idx = {} # need one dictionary per task
         self.pred_layer = [int(layer) for layer in pred_layer] # at which layer to predict each task
-        self.model = dynet.Model() #init model
+        self.model = dynet.ParameterCollection() #init model
         self.in_dim = in_dim
         self.h_dim = h_dim
         self.c_in_dim = c_in_dim
         self.activation = activation
+        self.mlp = mlp
+        self.activation_mlp = activation_mlp
         self.noise_sigma = noise_sigma
         self.h_layers = h_layers
         self.predictors = {"inner": [], "output_layers_dict": {}, "task_expected_at": {} } # the inner layers and predictors
@@ -226,7 +258,8 @@ class NNTagger(object):
         self.embeds_file = embeds_file
         self.backprob_embeds = backprob_embeds
         self.initializer = initializer
-        self.char_rnn = None # RNN for character input
+        self.char_rnn = None # biRNN for character input
+        self.builder = builder # default biRNN is an LSTM
 
 
     def pick_neg_log(self, pred, gold):
@@ -238,7 +271,7 @@ class NNTagger(object):
         self.w2i = w2i
         self.c2i = c2i
 
-    def fit(self, list_folders_name, num_iterations, train_algo, dev=None, word_dropout_rate=0.0, model_path=None, patience=0):
+    def fit(self, list_folders_name, num_iterations, train_algo, dev=None, word_dropout_rate=0.0, model_path=None, patience=0, minibatch_size=0):
         """
         train the tagger
         """
@@ -279,7 +312,6 @@ class NNTagger(object):
             self.wembeds.set_updated(False)
             print(">>> disable wembeds update <<< (is updated: {})".format(self.wembeds.is_updated()), file=sys.stderr)
 
-
         trainer = train_algo(self.model)
 
         train_data = list(zip(train_X,train_Y, task_labels))
@@ -289,7 +321,10 @@ class NNTagger(object):
         if dev and model_path is not None and patience > 0:
             print('Using early stopping with patience of %d...' % patience)
 
+        batch = []
+
         for iter in range(num_iterations):
+
             total_loss=0.0
             total_tagged=0.0
             random.shuffle(train_data)
@@ -299,18 +334,34 @@ class NNTagger(object):
                     word_indices = [self.w2i["_UNK"] if
                                         (random.random() > (widCount.get(w)/(word_dropout_rate+widCount.get(w))))
                                         else w for w in word_indices]
-                    #print(Counter(word_indices).get(0), "dropped")
 
-                # use same predict function for training and testing
-                output = self.predict(word_indices, char_indices, task_of_instance, train=True)
+                if minibatch_size > 1:
+                    # use same predict function for training and testing
+                    output = self.predict(word_indices, char_indices, task_of_instance, train=True)
+                    total_tagged += len(word_indices)
 
-                loss1 = dynet.esum([self.pick_neg_log(pred,gold) for pred, gold in zip(output, y)])
-                lv = loss1.value()
-                total_loss += lv
-                total_tagged += len(word_indices)
+                    loss1 = dynet.esum([self.pick_neg_log(pred,gold) for pred, gold in zip(output, y)])
+                    batch.append(loss1)
+                    if len(batch) == minibatch_size:
+                        loss = dynet.esum(batch)
+                        total_loss += loss.value()
+                        loss.backward()
+                        trainer.update()
+                        dynet.renew_cg()  # use new computational graph for each BATCH when batching is active
+                        batch = []
+                else:
+                    dynet.renew_cg() # new graph per item
+                    # use same predict function for training and testing
+                    output = self.predict(word_indices, char_indices, task_of_instance, train=True)
+                    total_tagged += len(word_indices)
 
-                loss1.backward()
-                trainer.update()
+                    loss1 = dynet.esum([self.pick_neg_log(pred,gold) for pred, gold in zip(output, y)])
+                    lv = loss1.value()
+                    total_loss += lv
+
+                    loss1.backward()
+                    trainer.update()
+
 
             print("iter {2} {0:>12}: {1:.2f}".format("total loss",total_loss/total_tagged,iter), file=sys.stderr)
             
@@ -333,6 +384,7 @@ class NNTagger(object):
                         print('No improvement for %d epochs. Early stopping...' % epochs_no_improvement, file=sys.stderr)
                         break
 
+
     def build_computation_graph(self, num_words, num_chars):
         """
         build graph and link to parameters
@@ -349,7 +401,8 @@ class NNTagger(object):
             init=0
             l = len(embeddings.keys())
             for word in embeddings.keys():
-                # for those words we have already in w2i, update vector, otherwise add to w2i (since we keep data as integers)
+                # for those words we have already in w2i, update vector
+                # otherwise add to w2i (since we keep data as integers)
                 if word not in self.w2i:
                     self.w2i[word]=len(self.w2i.keys()) # add new word
                 wembeds.init_row(self.w2i[word], embeddings[word])
@@ -381,25 +434,27 @@ class NNTagger(object):
         for layer_num in range(0,self.h_layers):
             if layer_num == 0:
                 if self.c_in_dim > 0:
-                    f_builder = dynet.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) # in_dim: size of each layer
-                    b_builder = dynet.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
+                    # in_dim: size of each layer
+                    f_builder = self.builder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
+                    b_builder = self.builder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
                 else:
-                    f_builder = dynet.LSTMBuilder(1, self.in_dim, self.h_dim, self.model)
-                    b_builder = dynet.LSTMBuilder(1, self.in_dim, self.h_dim, self.model)
+                    f_builder = self.builder(1, self.in_dim, self.h_dim, self.model)
+                    b_builder = self.builder(1, self.in_dim, self.h_dim, self.model)
 
                 layers.append(BiRNNSequencePredictor(f_builder, b_builder)) #returns forward and backward sequence
             else:
                 # add inner layers (if h_layers >1)
-                f_builder = dynet.LSTMBuilder(1, self.h_dim, self.h_dim, self.model)
-                b_builder = dynet.LSTMBuilder(1, self.h_dim, self.h_dim, self.model)
+                f_builder = self.builder(1, self.h_dim, self.h_dim, self.model)
+                b_builder = self.builder(1, self.h_dim, self.h_dim, self.model)
                 layers.append(BiRNNSequencePredictor(f_builder, b_builder))
 
         # store at which layer to predict task
         for task_id in self.tasks_ids:
             task_num_labels= len(self.task2tag2idx[task_id])
-            output_layers_dict[task_id] = FFSequencePredictor(Layer(self.model, self.h_dim*2, task_num_labels, dynet.softmax))
+            output_layers_dict[task_id] = FFSequencePredictor(Layer(self.model, self.h_dim*2, task_num_labels, dynet.softmax, mlp=self.mlp, mlp_activation=self.activation_mlp))
 
-        char_rnn = RNNSequencePredictor(dynet.LSTMBuilder(1, self.c_in_dim, self.c_in_dim, self.model))
+        char_rnn = BiRNNSequencePredictor(self.builder(1, self.c_in_dim, self.c_in_dim, self.model),
+                                          self.builder(1, self.c_in_dim, self.c_in_dim, self.model))
 
         predictors = {}
         predictors["inner"] = layers
@@ -455,7 +510,6 @@ class NNTagger(object):
         """
         predict tags for a sentence represented as char+word embeddings
         """
-        dynet.renew_cg() # new graph
 
         # word embeddings
         wfeatures = [self.wembeds[w] for w in word_indices]
@@ -466,13 +520,15 @@ class NNTagger(object):
             rev_char_emb = []
             # get representation for words
             for chars_of_token in char_indices:
+                char_feats = [self.cembeds[c] for c in chars_of_token]
                 # use last state as word representation
-                last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in chars_of_token])[-1]
-                rev_last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in reversed(chars_of_token)])[-1]
+                f_char, b_char = self.char_rnn.predict_sequence(char_feats, char_feats)
+                last_state = f_char[-1]
+                rev_last_state = b_char[-1]
                 char_emb.append(last_state)
                 rev_char_emb.append(rev_last_state)
 
-            features = [dynet.concatenate([w,c,rev_c]) for w,c,rev_c in zip(wfeatures,char_emb,reversed(rev_char_emb))]
+            features = [dynet.concatenate([w,c,rev_c]) for w,c,rev_c in zip(wfeatures,char_emb,rev_char_emb)]
         else:
             features = wfeatures
         
@@ -506,7 +562,7 @@ class NNTagger(object):
                 return output
 
             prev = forward_sequence
-            prev_rev = backward_sequence # not used
+            prev_rev = backward_sequence 
 
         raise Exception("oops should not be here")
         return None
@@ -529,9 +585,9 @@ class NNTagger(object):
                     sys.stderr.write('%s'%i)
                 elif i%10==0:
                     sys.stderr.write('.')
-                    
+
             output = self.predict(word_indices, word_char_indices, task_of_instance)
-            predicted_tag_indices = [np.argmax(o.value()) for o in output]  
+            predicted_tag_indices = [np.argmax(o.value()) for o in output]  # logprobs to indices
             if output_predictions:
                 prediction = [i2t[idx] for idx in predicted_tag_indices]
 
@@ -544,6 +600,7 @@ class NNTagger(object):
                     else:
                         print(u"{}\t{}\t{}".format(w, g, p))
                 print("")
+
             correct += sum([1 for (predicted, gold) in zip(predicted_tag_indices, gold_tag_indices) if predicted == gold])
             total += len(gold_tag_indices)
 
