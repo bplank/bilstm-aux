@@ -8,7 +8,7 @@ http://arxiv.org/abs/1604.05529
 ### Requirements
 
 * python3 
-* [dynet](https://github.com/clab/dynet)
+* [DyNet 2.0](https://github.com/clab/dynet)
 
 ## Installation
 
@@ -28,12 +28,12 @@ And compile dynet:
 cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python`
 ```
 
-(if you have a GPU:
+(if you have a GPU, use: [note: non-deterministic behavior]):
 
 ```
 cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python` -DBACKEND=cuda
 ```
-)
+
 
 After successful installation open python and import dynet, you can
 test if the installation worked with:
@@ -61,14 +61,22 @@ https://github.com/clab/dynet/pull/130#issuecomment-259656695
 Training the tagger:
 
 ```
-python src/bilty.py --dynet-seed 1512141834 --dynet-mem 1500 --train /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-train.conllu --test /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-test.conllu --dev /home/$user/corpora/pos/ud1.3/orgtok/goldpos//en-ud-dev.conllu --output /data/$user/experiments/bilty/predictions/bilty/en-ud-test.conllu.bilty-en-ud1.3-poly-i20-h1 --in_dim 64 --c_in_dim 100 --trainer sgd --iters 20 --sigma 0.2 --save /data/$user/experiments/bilty/models/bilty/bilty-en-ud1.3-poly-i20-h1.model --embeds embeds/poly_a/en.polyglot.txt --h_layers 1 --pred_layer 1  > /data/$user/experiments/bilty/nohup/bilty-en-ud1.3-poly-i20-h1.out 2> /data/$user/experiments/bilty/nohup/bilty.bilty-en-ud1.3-poly-i20-h1.out2
+python src/bilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --dev data/da-ud-test.conllu --iters 10 --pred_layer 1
 ```
 
 #### Embeddings
 
-The poly embeddings [(Al-Rfou et al.,
+The Polyglot embeddings [(Al-Rfou et al.,
 2013)](https://sites.google.com/site/rmyeid/projects/polyglot) can be
 downloaded from [here](http://www.let.rug.nl/bplank/bilty/embeds.tar.gz) (0.6GB)
+
+### Options:
+
+You can see the options by running:
+
+```
+python src/bilty.sh --help
+```
 
 
 #### A couple of remarks
@@ -77,22 +85,17 @@ The choice of 22 languages from UD1.2 (rather than 33) is described in
 our TACL parsing paper, Section 3.1. [(Agić et al.,
 2016)](https://transacl.org/ojs/index.php/tacl/article/view/869). Note,
 however, that the bi-LSTM tagger does not require large amounts of
-training data (as discussed in our paper). Therefore above are 
-results for all languages in UD1.3 (for the canonical language
-subparts, i.e., those with just the language prefix, no further
-suffix; e.g. 'nl' but not 'nl_lassy', and those languages which are
-distributed with word forms).
+training data (as discussed in our ACL 2016 paper). 
 
 The `bilty` code is a significantly refactored version of the code
 originally used in the paper. For example, `bilty` supports multi-task
-learning with output layers at different layers (`--pred_layer`), and
-it correctly supports stacked LSTMs (see e.g., Ballesteros et al.,
-2015, Dyer et al., 2015). The results on UD1.3 are obtained with
-`bilty` using no stacking (`--h_layers 1`). 
+learning with output layers at different layers (`--pred_layer`), as
+well as stacked LSTMs (see e.g., Ballesteros et al., 2015, Dyer et
+al., 2015). 
 
-#### Recommended setting for `bilty`:
-
-* 3 stacked LSTMs, predicting on outermost layer, otherwise default settings, i.e., `--h_layers 3 --pred_layer 3`
+DyNet 2.0 switched the default LSTM implementation to
+VanillaLSTMBuilder.  We observe slightly higher POS tagging results
+with the earlier CoupledLSTMBuilder, which is the current default.
 
 #### Reference
 
