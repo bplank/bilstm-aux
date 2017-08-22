@@ -78,11 +78,12 @@ You can see the options by running:
 python src/bilty.sh --help
 ```
 
-A great option is DyNet autobatching [Neubig et al., 2017](https://arxiv.org/abs/1705.07860). It speeds up training by ~20\%. 
-You can activate it with:
+A great option is DyNet autobatching ([Neubig et al.,
+2017](https://arxiv.org/abs/1705.07860)).  It speeds up training considerably (
+~20\%).  You can activate it with:
 
 ``
---dynet-autobatch
+python src/bilty.sh --dynet-autobatch 1
 ``
 
 #### A couple of remarks
