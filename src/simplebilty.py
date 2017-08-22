@@ -39,6 +39,7 @@ def main():
     parser.add_argument("--trainer", help="trainer [sgd, adam] default: adam", required=False, default="adam")
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
+    parser.add_argument("--dynet-autobatch", help="activate autobatching if set to 1", required=False, type=int, default=0)
     parser.add_argument("--save-embeds", help="save word embeddings file", required=False, default=None)
 
     args = parser.parse_args()
@@ -114,7 +115,7 @@ def load(args):
     tagger.predictors, tagger.char_rnn, tagger.wembeds, tagger.cembeds = \
         tagger.build_computation_graph(myparams["num_words"],
                                        myparams["num_chars"])
-    tagger.model.load(args.model)
+    tagger.model.populate(args.model)
     print("model loaded: {}".format(args.model), file=sys.stderr)
     return tagger
 
@@ -254,14 +255,17 @@ class SimpleBiltyTagger(object):
 
             if layer_num == 0:
                 if self.c_in_dim > 0:
-                    builder = dynet.LSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) # in_dim: size of each layer
+                    f_builder = dynet.CoupledLSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) # in_dim: size of each layer
+                    b_builder = dynet.CoupledLSTMBuilder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
                 else:
-                    builder = dynet.LSTMBuilder(1, self.in_dim, self.h_dim, self.model)
-                layers.append(BiRNNSequencePredictor(builder)) #returns forward and backward sequence
+                    f_builder = dynet.CoupledLSTMBuilder(1, self.in_dim, self.h_dim, self.model)
+                    b_builder = dynet.CoupledLSTMBuilder(1, self.in_dim, self.h_dim, self.model)
+                layers.append(BiRNNSequencePredictor(f_builder, b_builder)) #returns forward and backward sequence
             else:
                 # add inner layers (if h_layers >1)
-                builder = dynet.LSTMBuilder(1, self.h_dim, self.h_dim, self.model)
-                layers.append(BiRNNSequencePredictor(builder))
+                f_builder = dynet.LSTMBuilder(1, self.h_dim, self.h_dim, self.model)
+                b_builder = dynet.LSTMBuilder(1, self.h_dim, self.h_dim, self.model)
+                layers.append(BiRNNSequencePredictor(f_builder,b_builder))
 
        # store at which layer to predict task
 
@@ -269,7 +273,7 @@ class SimpleBiltyTagger(object):
         output_layer = FFSequencePredictor(Layer(self.model, self.h_dim*2, task_num_labels, dynet.softmax))
 
         if self.c_in_dim > 0:
-            char_rnn = RNNSequencePredictor(dynet.LSTMBuilder(1, self.c_in_dim, self.c_in_dim, self.model))
+            char_rnn = BiRNNSequencePredictor(dynet.CoupledLSTMBuilder(1, self.c_in_dim, self.c_in_dim, self.model), dynet.CoupledLSTMBuilder(1, self.c_in_dim, self.c_in_dim, self.model))
         else:
             char_rnn = None
 
@@ -336,14 +340,15 @@ class SimpleBiltyTagger(object):
         if self.c_in_dim > 0:
             # get representation for words
             for chars_of_token in char_indices:
+                char_feats = [self.cembeds[c] for c in chars_of_token]
                 # use last state as word representation
-                last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in chars_of_token])[-1]
-                rev_last_state = self.char_rnn.predict_sequence([self.cembeds[c] for c in reversed(chars_of_token)])[-1]
+                f_char, b_char = self.char_rnn.predict_sequence(char_feats, char_feats)
+                last_state = f_char[-1]
+                rev_last_state = b_char[-1]
                 char_emb.append(last_state)
                 rev_char_emb.append(rev_last_state)
 
-
-            features = [dynet.concatenate([w,c,rev_c]) for w,c,rev_c in zip(wfeatures,char_emb,reversed(rev_char_emb))]
+            features = [dynet.concatenate([w,c,rev_c]) for w,c,rev_c in zip(wfeatures,char_emb,rev_char_emb)]
         else:
             features = wfeatures
         
