@@ -16,6 +16,8 @@ import pickle
 import dynet
 import codecs
 
+from sklearn.model_selection import train_test_split
+
 from collections import Counter
 from lib.mnnl import FFSequencePredictor, Layer, RNNSequencePredictor, BiRNNSequencePredictor
 from lib.mio import read_conll_file, load_embeddings_file
@@ -313,7 +315,14 @@ class NNTagger(object):
                 widCount.update([w for w in sentence])
 
         if dev:
-            dev_X, dev_Y, org_X, org_Y, dev_task_labels = self.get_data_as_indices(dev, "task0")
+            if not os.path.exists(dev):
+                print('%s does not exist. Using 10% of the training dataset '
+                      'for validation.' % dev)
+                train_X, dev_X, train_Y, dev_Y = train_test_split(
+                    train_X, train_Y, test_size=0.1)
+                org_X, org_Y = None, None
+            else:
+                dev_X, dev_Y, org_X, org_Y, dev_task_labels = self.get_data_as_indices(dev, "task0")
 
         # init lookup parameters and define graph
         print("build graph",file=sys.stderr)
@@ -442,7 +451,9 @@ class NNTagger(object):
         # connect output layers to tasks
         for output_layer, task_id in zip(self.pred_layer, self.tasks_ids):
             if output_layer > self.h_layers:
-                raise ValueError("cannot have a task at a layer which is beyond the model, increase h_layers")
+                raise ValueError("cannot have a task at a layer (%d) which is "
+                                 "beyond the model, increase h_layers (%d)"
+                                 % (output_layer, self.h_layers))
             task_expected_at[task_id] = output_layer
         nb_tasks = len( self.tasks_ids )
 
