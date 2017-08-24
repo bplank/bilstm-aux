@@ -415,14 +415,13 @@ class NNTagger(object):
             wembeds = self.model.add_lookup_parameters((num_words, self.in_dim), init=self.initializer)
 
             init=0
-            l = len(embeddings.keys())
-            for word in embeddings.keys():
-                # for those words we have already in w2i, update vector
-                # otherwise add to w2i (since we keep data as integers)
-                if word not in self.w2i:
-                    self.w2i[word]=len(self.w2i.keys()) # add new word
-                wembeds.init_row(self.w2i[word], embeddings[word])
-                init+=1
+            for word, id_ in self.w2i.items():
+                if word in embeddings:
+                    wembeds.init_row(id_, embeddings[word])
+                    init += 1
+                elif word.lower() in embeddings:
+                    wembeds.init_row(id_, embeddings[word])
+                    init += 1
             print("initialized: {}".format(init), file=sys.stderr)
 
         else:
