@@ -316,8 +316,8 @@ class NNTagger(object):
 
         if dev:
             if not os.path.exists(dev):
-                print('%s does not exist. Using 10% of the training dataset '
-                      'for validation.' % dev)
+                print('%s does not exist. Using 10 percent of the training '
+                      'dataset for validation.' % dev)
                 train_X, dev_X, train_Y, dev_Y = train_test_split(
                     train_X, train_Y, test_size=0.1)
                 org_X, org_Y = None, None
