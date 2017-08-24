@@ -18,34 +18,7 @@ import codecs
 from collections import Counter
 from lib.mnnl import FFSequencePredictor, Layer, RNNSequencePredictor, BiRNNSequencePredictor
 from lib.mio import read_conll_file, load_embeddings_file
-
-## DyNet adds init option to choose initializer: https://github.com/clab/dynet/blob/master/python/CHANGES.md
-INITIALIZER_MAP = {
-                    'glorot': dynet.GlorotInitializer(),
-                    'constant': dynet.ConstInitializer(0.01),
-                    'uniform': dynet.UniformInitializer(0.1),
-                    'normal': dynet.NormalInitializer(mean = 0, var = 1)
-                  }
-
-TRAINER_MAP = {
-            "sgd": dynet.SimpleSGDTrainer,
-            "adam": dynet.AdamTrainer,
-            "adadelta": dynet.AdadeltaTrainer,
-            "adagrad": dynet.AdagradTrainer,
-            "momentum": dynet.MomentumSGDTrainer
-           }
-
-ACTIVATION_MAP = {
-             "tanh": dynet.tanh,
-             "rectify": dynet.rectify
-           }
-
-BUILDERS = {
-            "lstm": dynet.LSTMBuilder, # is dynet.VanillaLSTMBuilder (cf. https://github.com/clab/dynet/issues/474)
-            "lstmc": dynet.CoupledLSTMBuilder,
-            "gru": dynet.GRUBuilder,
-            "rnn": dynet.SimpleRNNBuilder
-           }
+from lib.mmappers import TRAINER_MAP, ACTIVATION_MAP, INITIALIZER_MAP, BUILDERS
 
 def main():
     parser = argparse.ArgumentParser(description="""Run the NN tagger""")
@@ -68,7 +41,7 @@ def main():
     parser.add_argument("--mlp", help="use MLP layer of this dimension [default 0=disabled]", required=False, default=0, type=int)
     parser.add_argument("--ac-mlp", help="activation function for MLP (if used) [rectify, tanh, ...]", default="rectify", choices=ACTIVATION_MAP.keys())
     parser.add_argument("--trainer", help="trainer [default: sgd]", required=False, choices=TRAINER_MAP.keys(), default="sgd")
-    parser.add_argument("--learning-rate", help="learning rate", default=0.1, type=float) # see: http://dynet.readthedocs.io/en/latest/optimizers.html
+    parser.add_argument("--learning-rate", help="learning rate [0: use default]", default=0, type=float) # see: http://dynet.readthedocs.io/en/latest/optimizers.html
     parser.add_argument("--patience", help="patience [default: -1=not used], requires specification of a dev set with --dev", required=False, default=-1, type=int)
     parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0.25], if 0=disabled, recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0.25, type=float)
 
@@ -270,7 +243,7 @@ class NNTagger(object):
         self.w2i = w2i
         self.c2i = c2i
 
-    def fit(self, list_folders_name, num_iterations, learning_algo, learning_rate=None, dev=None, word_dropout_rate=0.0, model_path=None, patience=0, minibatch_size=0):
+    def fit(self, list_folders_name, num_iterations, learning_algo, learning_rate=0, dev=None, word_dropout_rate=0.0, model_path=None, patience=0, minibatch_size=0):
         """
         train the tagger
         """
@@ -312,12 +285,9 @@ class NNTagger(object):
             print(">>> disable wembeds update <<< (is updated: {})".format(self.wembeds.is_updated()), file=sys.stderr)
 
         trainer_algo = TRAINER_MAP[learning_algo]
-        if learning_rate:
+        if learning_rate > 0:
             ### TODO: better handling of additional learning-specific parameters
-            if not "adam":
-                trainer = trainer_algo(self.model, learning_rate=learning_rate)
-            else:
-                trainer = trainer_algo(self.model, alpha=learning_rate)
+            trainer = trainer_algo(self.model, learning_rate=learning_rate)
         else:
             # using default learning rate
             trainer = trainer_algo(self.model)
