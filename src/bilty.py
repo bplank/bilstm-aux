@@ -616,15 +616,16 @@ class NNTagger(object):
             predicted_tag_indices = [np.argmax(o.value()) for o in output]  # logprobs to indices
             if output_predictions:
                 prediction = [i2t[idx] for idx in predicted_tag_indices]
+                tag_confidences = [np.max(o.value()) for o in output]
 
                 words = org_X[i]
                 gold = org_Y[i]
 
-                for w,g,p in zip(words,gold,prediction):
+                for w, g, p, c in zip(words, gold, prediction, tag_confidences):
                     if raw:
                         print(u"{}\t{}".format(w, p)) # do not print DUMMY tag when --raw is on
                     else:
-                        print(u"{}\t{}\t{}".format(w, g, p))
+                        print(u"%s\t%s\t%s\t%.2f" % (w, g, p, c))
                 print("")
 
             correct += sum([1 for (predicted, gold) in zip(predicted_tag_indices, gold_tag_indices) if predicted == gold])
