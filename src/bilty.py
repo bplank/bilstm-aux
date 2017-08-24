@@ -75,7 +75,6 @@ def main():
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-gpus", help="1 for GPU usage", default=0, type=int) # warning: non-deterministic results on GPU https://github.com/clab/dynet/issues/399
-#    parser.add_argument("--dynet-devices", help="specify CPU/GPU [CPU, GPU:1..]", default="CPU", type=str) # not yet fully supported in python binding https://github.com/clab/dynet/issues/804
     parser.add_argument("--dynet-autobatch", help="if 1 enable autobatching", default=0, type=int)
     parser.add_argument("--minibatch-size", help="size of minibatch for autobatching (1=disabled)", default=1, type=int)
 
@@ -133,11 +132,11 @@ def main():
                               noise_sigma=args.sigma,
                               backprob_embeds=args.disable_backprob_embeds,
                               initializer=INITIALIZER_MAP[args.initializer],
-                              builder=BUILDERS[args.builder]
+                              builder=BUILDERS[args.builder],
                           )
 
     if args.train and len( args.train ) != 0:
-        tagger.fit(args.train, args.iters, TRAINER_MAP[args.trainer],
+        tagger.fit(args.train, args.iters, args.trainer,
                    dev=args.dev, word_dropout_rate=args.word_dropout_rate,
                    model_path=args.save, patience=args.patience, minibatch_size=args.minibatch_size)
         if args.save:
@@ -271,7 +270,7 @@ class NNTagger(object):
         self.w2i = w2i
         self.c2i = c2i
 
-    def fit(self, list_folders_name, num_iterations, train_algo, dev=None, word_dropout_rate=0.0, model_path=None, patience=0, minibatch_size=0):
+    def fit(self, list_folders_name, num_iterations, learning_algo, learning_rate=None, dev=None, word_dropout_rate=0.0, model_path=None, patience=0, minibatch_size=0):
         """
         train the tagger
         """
@@ -312,7 +311,16 @@ class NNTagger(object):
             self.wembeds.set_updated(False)
             print(">>> disable wembeds update <<< (is updated: {})".format(self.wembeds.is_updated()), file=sys.stderr)
 
-        trainer = train_algo(self.model)
+        trainer_algo = TRAINER_MAP[learning_algo]
+        if learning_rate:
+            ### TODO: better handling of additional learning-specific parameters
+            if not "adam":
+                trainer = trainer_algo(self.model, learning_rate=learning_rate)
+            else:
+                trainer = trainer_algo(self.model, alpha=learning_rate)
+        else:
+            # using default learning rate
+            trainer = trainer_algo(self.model)
 
         train_data = list(zip(train_X,train_Y, task_labels))
 
