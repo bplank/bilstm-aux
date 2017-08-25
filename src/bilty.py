@@ -390,24 +390,33 @@ class NNTagger(object):
                     trainer.update()
 
 
-            print("iter {2} {0:>12}: {1:.2f}".format("total loss",total_loss/total_tagged,iter), file=sys.stderr)
+            print("iter {2} {0:>12}: {1:.2f}".format("total loss",
+                                                     total_loss/total_tagged,
+                                                     iter), file=sys.stderr,
+                  flush=True)
             
             if dev:
                 # evaluate after every epoch
                 correct, total = self.evaluate(dev_X, dev_Y, org_X, org_Y, dev_task_labels)
                 val_accuracy = correct/total
-                print("\ndev accuracy: %.4f" % (val_accuracy), file=sys.stderr)
+                print("\ndev accuracy: %.4f" % (val_accuracy),
+                      file=sys.stderr, flush=True)
 
                 if val_accuracy > best_val_acc:
-                    print('Accuracy %.4f is better than best val accuracy %.4f.' % (val_accuracy, best_val_acc), file=sys.stderr)
+                    print('Accuracy %.4f is better than best val accuracy '
+                          '%.4f.' % (val_accuracy, best_val_acc),
+                          file=sys.stderr, flush=True)
                     best_val_acc = val_accuracy
                     epochs_no_improvement = 0
                     save(self, model_path)
                 else:
-                    print('Accuracy %.4f is worse than best val loss %.4f.' % (val_accuracy, best_val_acc), file=sys.stderr)
+                    print('Accuracy %.4f is worse than best val loss %.4f.' %
+                          (val_accuracy, best_val_acc), file=sys.stderr,
+                          flush=True)
                     epochs_no_improvement += 1
                 if epochs_no_improvement == patience:
-                    print('No improvement for %d epochs. Early stopping...' % epochs_no_improvement, file=sys.stderr)
+                    print('No improvement for %d epochs. Early stopping...' %
+                          epochs_no_improvement, file=sys.stderr, flush=True)
                     break
 
 
