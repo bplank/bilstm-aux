@@ -321,6 +321,7 @@ class NNTagger(object):
                 train_X, dev_X, train_Y, dev_Y = train_test_split(
                     train_X, train_Y, test_size=0.1)
                 org_X, org_Y = None, None
+                dev_task_labels = [0] * len(train_X)
             else:
                 dev_X, dev_Y, org_X, org_Y, dev_task_labels = self.get_data_as_indices(dev, "task0")
 
