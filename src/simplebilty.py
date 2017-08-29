@@ -418,7 +418,71 @@ class SimpleBiltyTagger(object):
 
         return correct, total
 
+    def get_train_data_from_instances(self, train_words, train_tags):
+        """
+        Extension of get_train_data method. Extracts training data from two arrays of word and label lists.
+        transform training data to features (word indices)
+        map tags to integers
+        :param train_words: a numpy array containing lists of words
+        :param train_tags: a numpy array containing lists of corresponding tags
+        """
+        X = []
+        Y = []
 
+        # word 2 indices and tag 2 indices
+        w2i = {}  # word to index
+        c2i = {}  # char to index
+        tag2idx = {}  # tag2idx
+
+        w2i["_UNK"] = 0  # unk word / OOV
+        c2i["_UNK"] = 0  # unk char
+        c2i["<w>"] = 1  # word start
+        c2i["</w>"] = 2  # word end index
+
+        num_sentences = 0
+        num_tokens = 0
+        for instance_idx, (words, tags) in enumerate(zip(train_words, train_tags)):
+            instance_word_indices = []  # sequence of word indices
+            instance_char_indices = []  # sequence of char indices
+            instance_tags_indices = []  # sequence of tag indices
+
+            for i, (word, tag) in enumerate(zip(words, tags)):
+
+                # map words and tags to indices
+                if word not in w2i:
+                    w2i[word] = len(w2i)
+                instance_word_indices.append(w2i[word])
+
+                chars_of_word = [c2i["<w>"]]
+                for char in word:
+                    if char not in c2i:
+                        c2i[char] = len(c2i)
+                    chars_of_word.append(c2i[char])
+                chars_of_word.append(c2i["</w>"])
+                instance_char_indices.append(chars_of_word)
+
+                if tag not in tag2idx:
+                    tag2idx[tag] = len(tag2idx)
+
+                instance_tags_indices.append(tag2idx.get(tag))
+
+                num_tokens += 1
+
+            num_sentences += 1
+
+            X.append((instance_word_indices,
+                      instance_char_indices))  # list of word indices, for every word list of char indices
+            Y.append(instance_tags_indices)
+
+        print("%s sentences %s tokens" % (num_sentences, num_tokens), file=sys.stderr)
+        print("%s w features, %s c features " % (len(w2i), len(c2i)), file=sys.stderr)
+
+        assert (len(X) == len(Y))
+
+        # store mappings of words and tags to indices
+        self.set_indices(w2i, c2i, tag2idx)
+
+        return X, Y
 
     def get_train_data(self, train_data):
         """

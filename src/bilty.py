@@ -6,6 +6,7 @@ A neural network based tagger (bi-LSTM)
 - supports MTL
 :author: Barbara Plank
 """
+from __future__ import print_function
 import argparse
 import random
 import time
@@ -15,10 +16,41 @@ import os
 import pickle
 import dynet
 import codecs
+
 from collections import Counter
 from lib.mnnl import FFSequencePredictor, Layer, RNNSequencePredictor, BiRNNSequencePredictor
 from lib.mio import read_conll_file, load_embeddings_file
-from lib.mmappers import TRAINER_MAP, ACTIVATION_MAP, INITIALIZER_MAP, BUILDERS
+
+UNK = "_UNK"
+
+## DyNet adds init option to choose initializer: https://github.com/clab/dynet/blob/master/python/CHANGES.md
+INITIALIZER_MAP = {
+                    'glorot': dynet.GlorotInitializer(),
+                    'constant': dynet.ConstInitializer(0.01),
+                    'uniform': dynet.UniformInitializer(0.1),
+                    'normal': dynet.NormalInitializer(mean = 0, var = 1)
+                  }
+
+TRAINER_MAP = {
+            "sgd": dynet.SimpleSGDTrainer,
+            "adam": dynet.AdamTrainer,
+            "adadelta": dynet.AdadeltaTrainer,
+            "adagrad": dynet.AdagradTrainer,
+            "momentum": dynet.MomentumSGDTrainer
+           }
+
+ACTIVATION_MAP = {
+             "tanh": dynet.tanh,
+             "rectify": dynet.rectify
+           }
+
+BUILDERS = {
+            "lstm": dynet.LSTMBuilder, # is dynet.VanillaLSTMBuilder (cf. https://github.com/clab/dynet/issues/474)
+            "lstmc": dynet.CoupledLSTMBuilder,
+            "gru": dynet.GRUBuilder,
+            "rnn": dynet.SimpleRNNBuilder,
+            "deep": dynet.DeepLSTMBuilder1
+           }
 
 def main():
     parser = argparse.ArgumentParser(description="""Run the NN tagger""")
@@ -34,7 +66,7 @@ def main():
     parser.add_argument("--raw", help="if test file is in raw format (one sentence per line)", required=False, action="store_true", default=False)
     parser.add_argument("--dev", help="dev file(s)", required=False) 
     parser.add_argument("--output", help="output predictions to file", required=False,default=None)
-    parser.add_argument("--save", help="save model to file (appends .model as well as .pickle)", required=False,default=None)
+    parser.add_argument("--save", help="save model to file (appends .model as well as .pickle)", required=True,default=None)
     parser.add_argument("--embeds", help="word embeddings file", required=False, default=None)
     parser.add_argument("--sigma", help="noise sigma", required=False, default=0.2, type=float)
     parser.add_argument("--ac", help="activation function [rectify, tanh, ...]", default="tanh", choices=ACTIVATION_MAP.keys())
@@ -56,7 +88,18 @@ def main():
     parser.add_argument("--initializer", help="initializer for embeddings (default: constant)", choices=INITIALIZER_MAP.keys(), default="constant")
     parser.add_argument("--builder", help="RNN builder (default: lstmc)", choices=BUILDERS.keys(), default="lstmc")
 
+    # new parameters
+    parser.add_argument('--max-vocab-size', type=int, help='the maximum size '
+                                                           'of the vocabulary')
+
     args = parser.parse_args()
+
+    if args.output is not None:
+        assert os.path.exists(os.path.dirname(args.output))
+
+    if not os.path.exists(os.path.dirname(args.save)):
+        print('Creating %s...' % os.path.dirname(args.save))
+        os.makedirs(os.path.dirname(args.save))
 
     if args.train:
         if not args.pred_layer:
@@ -64,7 +107,7 @@ def main():
             exit()
     
     if args.dynet_seed:
-        print(">>> using seed: {} <<< ".format(args.dynet_seed), file=sys.stderr)
+        print(">>> using seed: {0} <<< ".format(args.dynet_seed), file=sys.stderr)
         np.random.seed(args.dynet_seed)
         random.seed(args.dynet_seed)
 
@@ -72,7 +115,7 @@ def main():
         print(">>> disable character embeddings <<<", file=sys.stderr)
 
     if args.minibatch_size > 1:
-        print(">>> using minibatch_size {} <<<".format(args.minibatch_size))
+        print(">>> using minibatch_size {0} <<<".format(args.minibatch_size))
 
     if args.save:
         # check if folder exists
@@ -94,18 +137,19 @@ def main():
         tagger = load(args)
     else:
         tagger = NNTagger(args.in_dim,
-                              args.h_dim,
-                              args.c_in_dim,
-                              args.h_layers,
-                              args.pred_layer,
-                              embeds_file=args.embeds,
-                              activation=ACTIVATION_MAP[args.ac],
-                              mlp=args.mlp,
-                              activation_mlp=ACTIVATION_MAP[args.ac_mlp],
-                              noise_sigma=args.sigma,
-                              backprob_embeds=args.disable_backprob_embeds,
-                              initializer=INITIALIZER_MAP[args.initializer],
-                              builder=BUILDERS[args.builder],
+                          args.h_dim,
+                          args.c_in_dim,
+                          args.h_layers,
+                          args.pred_layer,
+                          embeds_file=args.embeds,
+                          activation=ACTIVATION_MAP[args.ac],
+                          mlp=args.mlp,
+                          activation_mlp=ACTIVATION_MAP[args.ac_mlp],
+                          noise_sigma=args.sigma,
+                          backprob_embeds=args.disable_backprob_embeds,
+                          initializer=INITIALIZER_MAP[args.initializer],
+                          builder=BUILDERS[args.builder],
+                          max_vocab_size=args.max_vocab_size
                           )
 
     if args.train and len( args.train ) != 0:
@@ -123,9 +167,9 @@ def main():
 
         stdout = sys.stdout
         # One file per test ... 
-        for i, test in enumerate( args.test ):
+        for i, test in enumerate(args.test):
 
-            if args.output != None:
+            if args.output is not None:
                 file_pred = args.output+".task"+str(i)
                 sys.stdout = codecs.open(file_pred, 'w', encoding='utf-8')
 
@@ -209,7 +253,9 @@ def save(nntagger, model_path):
 class NNTagger(object):
 
     def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=ACTIVATION_MAP["tanh"],mlp=0,activation_mlp=ACTIVATION_MAP["rectify"],
-                 backprob_embeds=True,noise_sigma=0.1, tasks_ids=[],initializer=INITIALIZER_MAP["glorot"], builder=BUILDERS["lstmc"]):
+                 backprob_embeds=True,noise_sigma=0.1, tasks_ids=[],
+                 initializer=INITIALIZER_MAP["glorot"], builder=BUILDERS["lstmc"],
+                 max_vocab_size=None):
         self.w2i = {}  # word to index mapping
         self.c2i = {}  # char to index mapping
         self.tasks_ids = tasks_ids # list of names for each task
@@ -232,6 +278,7 @@ class NNTagger(object):
         self.initializer = initializer
         self.char_rnn = None # biRNN for character input
         self.builder = builder # default biRNN is an LSTM
+        self.max_vocab_size = max_vocab_size
 
 
     def pick_neg_log(self, pred, gold):
@@ -309,7 +356,7 @@ class NNTagger(object):
             for ((word_indices,char_indices),y, task_of_instance) in train_data:
 
                 if word_dropout_rate > 0.0:
-                    word_indices = [self.w2i["_UNK"] if
+                    word_indices = [self.w2i[UNK] if
                                         (random.random() > (widCount.get(w)/(word_dropout_rate+widCount.get(w))))
                                         else w for w in word_indices]
 
@@ -348,18 +395,17 @@ class NNTagger(object):
                 val_accuracy = correct/total
                 print("\ndev accuracy: %.4f" % (val_accuracy), file=sys.stderr)
 
-                if model_path is not None:
-                    if val_accuracy > best_val_acc:
-                        print('Accuracy %.4f is better than best val accuracy %.4f.' % (val_accuracy, best_val_acc), file=sys.stderr)
-                        best_val_acc = val_accuracy
-                        epochs_no_improvement = 0
-                        save(self, model_path)
-                    else:
-                        print('Accuracy %.4f is worse than best val loss %.4f.' % (val_accuracy, best_val_acc), file=sys.stderr)
-                        epochs_no_improvement += 1
-                    if epochs_no_improvement == patience:
-                        print('No improvement for %d epochs. Early stopping...' % epochs_no_improvement, file=sys.stderr)
-                        break
+                if val_accuracy > best_val_acc:
+                    print('Accuracy %.4f is better than best val accuracy %.4f.' % (val_accuracy, best_val_acc), file=sys.stderr)
+                    best_val_acc = val_accuracy
+                    epochs_no_improvement = 0
+                    save(self, model_path)
+                else:
+                    print('Accuracy %.4f is worse than best val loss %.4f.' % (val_accuracy, best_val_acc), file=sys.stderr)
+                    epochs_no_improvement += 1
+                if epochs_no_improvement == patience:
+                    print('No improvement for %d epochs. Early stopping...' % epochs_no_improvement, file=sys.stderr)
+                    break
 
 
     def build_computation_graph(self, num_words, num_chars):
@@ -376,14 +422,13 @@ class NNTagger(object):
             wembeds = self.model.add_lookup_parameters((num_words, self.in_dim), init=self.initializer)
 
             init=0
-            l = len(embeddings.keys())
-            for word in embeddings.keys():
-                # for those words we have already in w2i, update vector
-                # otherwise add to w2i (since we keep data as integers)
-                if word not in self.w2i:
-                    self.w2i[word]=len(self.w2i.keys()) # add new word
-                wembeds.init_row(self.w2i[word], embeddings[word])
-                init+=1
+            for word, id_ in self.w2i.items():
+                if word in embeddings:
+                    wembeds.init_row(id_, embeddings[word])
+                    init += 1
+                elif word.lower() in embeddings:
+                    wembeds.init_row(id_, embeddings[word])
+                    init += 1
             print("initialized: {}".format(init), file=sys.stderr)
 
         else:
@@ -408,30 +453,42 @@ class NNTagger(object):
             task_expected_at[task_id] = output_layer
         nb_tasks = len( self.tasks_ids )
 
-        for layer_num in range(0,self.h_layers):
-            if layer_num == 0:
-                if self.c_in_dim > 0:
-                    # in_dim: size of each layer
-                    f_builder = self.builder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
-                    b_builder = self.builder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
-                else:
-                    f_builder = self.builder(1, self.in_dim, self.h_dim, self.model)
-                    b_builder = self.builder(1, self.in_dim, self.h_dim, self.model)
-
-                layers.append(BiRNNSequencePredictor(f_builder, b_builder)) #returns forward and backward sequence
+        if self.builder == dynet.DeepLSTMBuilder1:
+            if self.c_in_dim > 0:
+                # in_dim: size of each layer
+                f_builder = self.builder(self.h_layers, self.in_dim+self.c_in_dim*2, self.h_dim, self.model)
+                b_builder = self.builder(self.h_layers, self.in_dim+self.c_in_dim*2, self.h_dim, self.model)
             else:
-                # add inner layers (if h_layers >1)
-                f_builder = self.builder(1, self.h_dim, self.h_dim, self.model)
-                b_builder = self.builder(1, self.h_dim, self.h_dim, self.model)
-                layers.append(BiRNNSequencePredictor(f_builder, b_builder))
+                f_builder = self.builder(self.h_layers, self.in_dim, self.h_dim, self.model)
+                b_builder = self.builder(self.h_layers, self.in_dim, self.h_dim, self.model)
+
+            layers.append(BiRNNSequencePredictor(f_builder, b_builder)) #returns forward and backward sequence
+        else:
+            for layer_num in range(0,self.h_layers):
+                if layer_num == 0:
+                    if self.c_in_dim > 0:
+                        # in_dim: size of each layer
+                        f_builder = self.builder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
+                        b_builder = self.builder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
+                    else:
+                        f_builder = self.builder(1, self.in_dim, self.h_dim, self.model)
+                        b_builder = self.builder(1, self.in_dim, self.h_dim, self.model)
+
+                    layers.append(BiRNNSequencePredictor(f_builder, b_builder)) #returns forward and backward sequence
+                else:
+                    # add inner layers (if h_layers >1)
+                    f_builder = self.builder(1, self.h_dim, self.h_dim, self.model)
+                    b_builder = self.builder(1, self.h_dim, self.h_dim, self.model)
+                    layers.append(BiRNNSequencePredictor(f_builder, b_builder))
 
         # store at which layer to predict task
         for task_id in self.tasks_ids:
             task_num_labels= len(self.task2tag2idx[task_id])
             output_layers_dict[task_id] = FFSequencePredictor(Layer(self.model, self.h_dim*2, task_num_labels, dynet.softmax, mlp=self.mlp, mlp_activation=self.activation_mlp))
 
+
         char_rnn = BiRNNSequencePredictor(self.builder(1, self.c_in_dim, self.c_in_dim, self.model),
-                                          self.builder(1, self.c_in_dim, self.c_in_dim, self.model))
+                                      self.builder(1, self.c_in_dim, self.c_in_dim, self.model))
 
         predictors = {}
         predictors["inner"] = layers
@@ -450,7 +507,7 @@ class NNTagger(object):
             if word in self.w2i:
                 word_indices.append(self.w2i[word])
             else:
-                word_indices.append(self.w2i["_UNK"])
+                word_indices.append(self.w2i[UNK])
 
             if self.c_in_dim > 0:
                 chars_of_word = [self.c2i["<w>"]]
@@ -458,7 +515,7 @@ class NNTagger(object):
                     if char in self.c2i:
                         chars_of_word.append(self.c2i[char])
                     else:
-                        chars_of_word.append(self.c2i["_UNK"])
+                        chars_of_word.append(self.c2i[UNK])
                 chars_of_word.append(self.c2i["</w>"])
                 word_char_indices.append(chars_of_word)
         return word_indices, word_char_indices
@@ -603,13 +660,23 @@ class NNTagger(object):
         c2i = {} # char to index
         task2tag2idx = {} # id of the task -> tag2idx
 
-        w2i["_UNK"] = 0  # unk word / OOV
-        c2i["_UNK"] = 0  # unk char
+        w2i[UNK] = 0  # unk word / OOV
+        c2i[UNK] = 0  # unk char
         c2i["<w>"] = 1   # word start
         c2i["</w>"] = 2  # word end index
-        
-        
-        for i, folder_name in enumerate( list_folders_name ):
+
+        if self.max_vocab_size is not None:
+            word_counter = Counter()
+            print('Reading files to create vocabulary of size %d.' %
+                  self.max_vocab_size)
+            for i, folder_name in enumerate(list_folders_name):
+                for words, _ in read_conll_file(folder_name):
+                    word_counter.update(words)
+            word_count_pairs = word_counter.most_common(self.max_vocab_size-1)
+            for word, _ in word_count_pairs:
+                w2i[word] = len(w2i)
+
+        for i, folder_name in enumerate(list_folders_name):
             num_sentences=0
             num_tokens=0
             task_id = 'task'+str(i)
@@ -626,9 +693,13 @@ class NNTagger(object):
                     num_tokens += 1
 
                     # map words and tags to indices
-                    if word not in w2i:
-                        w2i[word] = len(w2i)
-                    instance_word_indices.append(w2i[word])
+                    if word not in w2i and self.max_vocab_size is not None:
+                        # if word is not in the created vocab, add an UNK token
+                        instance_word_indices.append(w2i[UNK])
+                    else:
+                        if word not in w2i:
+                            w2i[word] = len(w2i)
+                        instance_word_indices.append(w2i[word])
 
                     if self.c_in_dim > 0:
                         chars_of_word = [c2i["<w>"]]
