@@ -148,8 +148,10 @@ def save(nntagger, args):
 
 class SimpleBiltyTagger(object):
 
-    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,embeds_file=None,activation=dynet.tanh, noise_sigma=0.1):
-        self.w2i = {}  # word to index mapping
+    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,embeds_file=None,
+                 activation=dynet.tanh, noise_sigma=0.1,
+                 word2id=None):
+        self.w2i = {} if word2id is None else word2id  # word to index mapping
         self.c2i = {}  # char to index mapping
         self.tag2idx = {} # tag to tag_id mapping
         self.model = dynet.ParameterCollection() #init model
@@ -174,7 +176,9 @@ class SimpleBiltyTagger(object):
         self.w2i = w2i
         self.c2i = c2i
 
-    def fit(self, train_X, train_Y, num_iterations, train_algo, learning_rate=0, seed=None, word_dropout_rate=0.25):
+    def fit(self, train_X, train_Y, num_epochs, train_algo, val_X=None,
+            val_Y=None, patience=2, model_path=None, seed=None,
+            word_dropout_rate=0.25, learning_rate=0):
         """
         train the tagger
         """
@@ -208,7 +212,11 @@ class SimpleBiltyTagger(object):
         assert(len(train_X)==len(train_Y))
         train_data = list(zip(train_X,train_Y))
 
-        for cur_iter in range(num_iterations):
+        print('Starting training for %d epochs...' % num_epochs)
+        best_val_acc, epochs_no_improvement = 0., 0
+        if val_X is not None and val_Y is not None and model_path is not None:
+            print('Using early stopping with patience of %d...' % patience)
+        for cur_iter in range(num_epochs):
             total_loss=0.0
             total_tagged=0.0
             random.shuffle(train_data)
@@ -228,6 +236,23 @@ class SimpleBiltyTagger(object):
                 trainer.update()
 
             print("iter {2} {0:>12}: {1:.2f}".format("total loss",total_loss/total_tagged,cur_iter), file=sys.stderr)
+
+            # get the best accuracy on the validation set
+            val_correct, val_total = self.evaluate(val_X, val_Y)
+            val_accuracy = val_correct / val_total
+
+            if val_X is not None and val_Y is not None and model_path is not None:
+                if val_accuracy > best_val_acc:
+                    print('Accuracy %.4f is better than best val accuracy %.4f.' % (val_accuracy, best_val_acc))
+                    best_val_acc = val_accuracy
+                    epochs_no_improvement = 0
+                    save(self, model_path)
+                else:
+                    print('Accuracy %.4f is worse than best val loss %.4f.' % (val_accuracy, best_val_acc))
+                    epochs_no_improvement += 1
+                if epochs_no_improvement == patience:
+                    print('No improvement for %d epochs. Early stopping...' % epochs_no_improvement)
+                    break
 
     def build_computation_graph(self, num_words, num_chars):
         """
@@ -321,7 +346,6 @@ class SimpleBiltyTagger(object):
                 chars_of_word.append(self.c2i["</w>"])
                 word_char_indices.append(chars_of_word)
         return word_indices, word_char_indices
-                                                                                                                                
 
     def get_data_as_indices(self, file_name):
         """
@@ -340,6 +364,23 @@ class SimpleBiltyTagger(object):
             org_Y.append(tags)
         return X, Y  #, org_X, org_Y - for now don't use
 
+    def get_data_as_indices_from_instances(self, dev_words, dev_tags):
+        """
+        Extension of get_data_as_indices. Use words and tags rather than a file as input.
+        X = list of (word_indices, word_char_indices)
+        Y = list of tag indices
+        """
+        X, Y = [], []
+        org_X, org_Y = [], []
+
+        for (words, tags) in zip(dev_words, dev_tags):
+            word_indices, word_char_indices = self.get_features(words)
+            tag_indices = [self.tag2idx.get(tag) for tag in tags]
+            X.append((word_indices, word_char_indices))
+            Y.append(tag_indices)
+            org_X.append(words)
+            org_Y.append(tags)
+        return X, Y  # , org_X, org_Y - for now don't use
 
     def predict(self, word_indices, char_indices, train=False):
         """
@@ -430,11 +471,14 @@ class SimpleBiltyTagger(object):
         Y = []
 
         # word 2 indices and tag 2 indices
-        w2i = {}  # word to index
+        w2i = self.w2i.copy()  # get a copy that refers to a different object
         c2i = {}  # char to index
         tag2idx = {}  # tag2idx
 
-        w2i["_UNK"] = 0  # unk word / OOV
+        if len(w2i) > 0:
+            assert w2i["_UNK"] == 0
+        else:
+            w2i["_UNK"] = 0  # unk word / OOV
         c2i["_UNK"] = 0  # unk char
         c2i["<w>"] = 1  # word start
         c2i["</w>"] = 2  # word end index
@@ -449,9 +493,14 @@ class SimpleBiltyTagger(object):
             for i, (word, tag) in enumerate(zip(words, tags)):
 
                 # map words and tags to indices
-                if word not in w2i:
+                if word not in w2i and len(self.w2i) != 0:
+                    # the vocabulary has already been created
+                    instance_word_indices.append(w2i["_UNK"])
+                elif word not in w2i:
                     w2i[word] = len(w2i)
-                instance_word_indices.append(w2i[word])
+                    instance_word_indices.append(w2i[word])
+                else:
+                    instance_word_indices.append(w2i[word])
 
                 chars_of_word = [c2i["<w>"]]
                 for char in word:
