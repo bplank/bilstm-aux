@@ -6,7 +6,7 @@ A neural network based tagger (bi-LSTM) - version w/o MTL, and more easily calla
 
 Diffs to bilty:
 * no support for MTL
-* fewer options, like no --output option, no word dropout
+* fewer options than 'bilty'
 """
 import argparse
 import random
@@ -16,9 +16,12 @@ import numpy as np
 import os
 import pickle
 import dynet
+from collections import Counter
+
 
 from lib.mnnl import FFSequencePredictor, Layer, RNNSequencePredictor, BiRNNSequencePredictor
 from lib.mio import read_conll_file, load_embeddings_file
+from lib.mmappers import TRAINER_MAP
 
 
 def main():
@@ -36,10 +39,12 @@ def main():
     parser.add_argument("--embeds", help="word embeddings file", required=False, default=None)
     parser.add_argument("--sigma", help="noise sigma", required=False, default=0.2, type=float)
     parser.add_argument("--ac", help="activation function [rectify, tanh, ...]", default="tanh", type=MyNNTaggerArgumentOptions.acfunct)
-    parser.add_argument("--trainer", help="trainer [sgd, adam] default: adam", required=False, default="adam")
+    parser.add_argument("--trainer", help="trainer [sgd, adam] default: adam", required=False, default="sgd")
+    parser.add_argument("--learning-rate", help="learning rate [0: use default]", default=0, type=float) # see: http://dynet.readthedocs.io/en/latest/optimizers.html
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-autobatch", help="activate autobatching if set to 1", required=False, type=int, default=0)
+    parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0.25], if 0=disabled, recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0.25, type=float)
     parser.add_argument("--save-embeds", help="save word embeddings file", required=False, default=None)
 
     args = parser.parse_args()
@@ -74,7 +79,7 @@ def main():
         if args.dev:
             dev_X, dev_Y = tagger.get_data_as_indices(args.dev)
 
-        tagger.fit(train_X, train_Y, args.iters, args.trainer, seed=args.dynet_seed)
+        tagger.fit(train_X, train_Y, args.iters, args.trainer, learning_rate=args.learning_rate, seed=args.dynet_seed, word_dropout_rate=args.word_dropout_rate)
         if args.save:
             save(tagger, args)
 
@@ -94,9 +99,8 @@ def main():
         activation=args.ac.__name__
     else:
         activation="None"
-    print("Info: biLSTM\n\tin_dim: {0}\n\tc_in_dim: {6}\n\th_dim: {1}"
-          "\n\th_layers: {2}\n\tactivation: {4}\n\tsigma: {5}\n"
-          "\tembeds: {3}".format(args.in_dim,args.h_dim,args.h_layers,args.embeds,activation, args.sigma, args.c_in_dim), file=sys.stderr)
+    print("Info: biLSTM\n\t" + "\n\t".join(["{}: {}".format(a, v) for a, v in vars(args).items()
+                                            if a not in ["train", "test", "dev", "pred_layer"]]), file=sys.stderr)
 
     if args.save_embeds:
         tagger.save_embeds(args.save_embeds)
@@ -148,7 +152,7 @@ class SimpleBiltyTagger(object):
         self.w2i = {}  # word to index mapping
         self.c2i = {}  # char to index mapping
         self.tag2idx = {} # tag to tag_id mapping
-        self.model = dynet.Model() #init model
+        self.model = dynet.ParameterCollection() #init model
         self.in_dim = in_dim
         self.h_dim = h_dim
         self.c_in_dim = c_in_dim
@@ -170,7 +174,7 @@ class SimpleBiltyTagger(object):
         self.w2i = w2i
         self.c2i = c2i
 
-    def fit(self, train_X, train_Y, num_iterations, train_algo, seed=None):
+    def fit(self, train_X, train_Y, num_iterations, train_algo, learning_rate=0, seed=None, word_dropout_rate=0.25):
         """
         train the tagger
         """
@@ -188,10 +192,18 @@ class SimpleBiltyTagger(object):
         
         self.predictors, self.char_rnn, self.wembeds, self.cembeds = self.build_computation_graph(num_words, num_chars)
 
-        if train_algo == "sgd":
-            trainer = dynet.SimpleSGDTrainer(self.model)
-        elif train_algo == "adam":
-            trainer = dynet.AdamTrainer(self.model)
+        training_algo = TRAINER_MAP[train_algo]
+
+        if learning_rate > 0:
+            trainer = training_algo(self.model, learning_rate=learning_rate)
+        else:
+            trainer = training_algo(self.model)
+
+        # if we use word dropout keep track of counts
+        if word_dropout_rate > 0.0:
+            widCount = Counter()
+            for sentence, _ in train_X:
+                widCount.update([w for w in sentence])
 
         assert(len(train_X)==len(train_Y))
         train_data = list(zip(train_X,train_Y))
@@ -201,7 +213,10 @@ class SimpleBiltyTagger(object):
             total_tagged=0.0
             random.shuffle(train_data)
             for ((word_indices,char_indices),y) in train_data:
-                # use same predict function for training and testing
+                if word_dropout_rate > 0.0:
+                    word_indices = [self.w2i["_UNK"] if
+                                        (random.random() > (widCount.get(w)/(word_dropout_rate+widCount.get(w))))
+                                        else w for w in word_indices]
                 output = self.predict(word_indices, char_indices, train=True)
 
                 loss1 = dynet.esum([self.pick_neg_log(pred,gold) for pred, gold in zip(output, y)])
