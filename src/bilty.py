@@ -6,6 +6,7 @@ A neural network based tagger (bi-LSTM)
 - supports MTL
 :author: Barbara Plank
 """
+from __future__ import print_function
 import argparse
 import random
 import time
@@ -47,7 +48,8 @@ BUILDERS = {
             "lstm": dynet.LSTMBuilder, # is dynet.VanillaLSTMBuilder (cf. https://github.com/clab/dynet/issues/474)
             "lstmc": dynet.CoupledLSTMBuilder,
             "gru": dynet.GRUBuilder,
-            "rnn": dynet.SimpleRNNBuilder
+            "rnn": dynet.SimpleRNNBuilder,
+            "deep": dynet.DeepLSTMBuilder1
            }
 
 def main():
@@ -106,7 +108,7 @@ def main():
             exit()
     
     if args.dynet_seed:
-        print(">>> using seed: {} <<< ".format(args.dynet_seed), file=sys.stderr)
+        print(">>> using seed: {0} <<< ".format(args.dynet_seed), file=sys.stderr)
         np.random.seed(args.dynet_seed)
         random.seed(args.dynet_seed)
 
@@ -114,7 +116,7 @@ def main():
         print(">>> disable character embeddings <<<", file=sys.stderr)
 
     if args.minibatch_size > 1:
-        print(">>> using minibatch_size {} <<<".format(args.minibatch_size))
+        print(">>> using minibatch_size {0} <<<".format(args.minibatch_size))
 
     if args.save:
         # check if folder exists
@@ -446,30 +448,42 @@ class NNTagger(object):
             task_expected_at[task_id] = output_layer
         nb_tasks = len( self.tasks_ids )
 
-        for layer_num in range(0,self.h_layers):
-            if layer_num == 0:
-                if self.c_in_dim > 0:
-                    # in_dim: size of each layer
-                    f_builder = self.builder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
-                    b_builder = self.builder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
-                else:
-                    f_builder = self.builder(1, self.in_dim, self.h_dim, self.model)
-                    b_builder = self.builder(1, self.in_dim, self.h_dim, self.model)
-
-                layers.append(BiRNNSequencePredictor(f_builder, b_builder)) #returns forward and backward sequence
+        if self.builder == dynet.DeepLSTMBuilder1:
+            if self.c_in_dim > 0:
+                # in_dim: size of each layer
+                f_builder = self.builder(self.h_layers, self.in_dim+self.c_in_dim*2, self.h_dim, self.model)
+                b_builder = self.builder(self.h_layers, self.in_dim+self.c_in_dim*2, self.h_dim, self.model)
             else:
-                # add inner layers (if h_layers >1)
-                f_builder = self.builder(1, self.h_dim, self.h_dim, self.model)
-                b_builder = self.builder(1, self.h_dim, self.h_dim, self.model)
-                layers.append(BiRNNSequencePredictor(f_builder, b_builder))
+                f_builder = self.builder(self.h_layers, self.in_dim, self.h_dim, self.model)
+                b_builder = self.builder(self.h_layers, self.in_dim, self.h_dim, self.model)
+
+            layers.append(BiRNNSequencePredictor(f_builder, b_builder)) #returns forward and backward sequence
+        else:
+            for layer_num in range(0,self.h_layers):
+                if layer_num == 0:
+                    if self.c_in_dim > 0:
+                        # in_dim: size of each layer
+                        f_builder = self.builder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
+                        b_builder = self.builder(1, self.in_dim+self.c_in_dim*2, self.h_dim, self.model) 
+                    else:
+                        f_builder = self.builder(1, self.in_dim, self.h_dim, self.model)
+                        b_builder = self.builder(1, self.in_dim, self.h_dim, self.model)
+
+                    layers.append(BiRNNSequencePredictor(f_builder, b_builder)) #returns forward and backward sequence
+                else:
+                    # add inner layers (if h_layers >1)
+                    f_builder = self.builder(1, self.h_dim, self.h_dim, self.model)
+                    b_builder = self.builder(1, self.h_dim, self.h_dim, self.model)
+                    layers.append(BiRNNSequencePredictor(f_builder, b_builder))
 
         # store at which layer to predict task
         for task_id in self.tasks_ids:
             task_num_labels= len(self.task2tag2idx[task_id])
             output_layers_dict[task_id] = FFSequencePredictor(Layer(self.model, self.h_dim*2, task_num_labels, dynet.softmax, mlp=self.mlp, mlp_activation=self.activation_mlp))
 
+
         char_rnn = BiRNNSequencePredictor(self.builder(1, self.c_in_dim, self.c_in_dim, self.model),
-                                          self.builder(1, self.c_in_dim, self.c_in_dim, self.model))
+                                      self.builder(1, self.c_in_dim, self.c_in_dim, self.model))
 
         predictors = {}
         predictors["inner"] = layers
