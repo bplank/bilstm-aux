@@ -73,14 +73,13 @@ def main():
     parser.add_argument("--mlp", help="use MLP layer of this dimension [default 0=disabled]", required=False, default=0, type=int)
     parser.add_argument("--ac-mlp", help="activation function for MLP (if used) [rectify, tanh, ...]", default="rectify", choices=ACTIVATION_MAP.keys())
     parser.add_argument("--trainer", help="trainer [default: sgd]", required=False, choices=TRAINER_MAP.keys(), default="sgd")
-    parser.add_argument("--learning-rate", help="learning rate", default=0.1, type=float) # see: http://dynet.readthedocs.io/en/latest/optimizers.html
+    parser.add_argument("--learning-rate", help="learning rate [0: use default]", default=0, type=float) # see: http://dynet.readthedocs.io/en/latest/optimizers.html
     parser.add_argument("--patience", help="patience [default: -1=not used], requires specification of a dev set with --dev", required=False, default=-1, type=int)
     parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0.25], if 0=disabled, recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0.25, type=float)
 
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-mem", help="memory for dynet (needs to be first argument!)", required=False, type=int)
     parser.add_argument("--dynet-gpus", help="1 for GPU usage", default=0, type=int) # warning: non-deterministic results on GPU https://github.com/clab/dynet/issues/399
-#    parser.add_argument("--dynet-devices", help="specify CPU/GPU [CPU, GPU:1..]", default="CPU", type=str) # not yet fully supported in python binding https://github.com/clab/dynet/issues/804
     parser.add_argument("--dynet-autobatch", help="if 1 enable autobatching", default=0, type=int)
     parser.add_argument("--minibatch-size", help="size of minibatch for autobatching (1=disabled)", default=1, type=int)
 
@@ -154,7 +153,7 @@ def main():
                           )
 
     if args.train and len( args.train ) != 0:
-        tagger.fit(args.train, args.iters, TRAINER_MAP[args.trainer],
+        tagger.fit(args.train, args.iters, args.trainer,
                    dev=args.dev, word_dropout_rate=args.word_dropout_rate,
                    model_path=args.save, patience=args.patience, minibatch_size=args.minibatch_size)
         if args.save:
@@ -291,7 +290,7 @@ class NNTagger(object):
         self.w2i = w2i
         self.c2i = c2i
 
-    def fit(self, list_folders_name, num_iterations, train_algo, dev=None, word_dropout_rate=0.0, model_path=None, patience=0, minibatch_size=0):
+    def fit(self, list_folders_name, num_iterations, learning_algo, learning_rate=0, dev=None, word_dropout_rate=0.0, model_path=None, patience=0, minibatch_size=0):
         """
         train the tagger
         """
@@ -332,7 +331,13 @@ class NNTagger(object):
             self.wembeds.set_updated(False)
             print(">>> disable wembeds update <<< (is updated: {})".format(self.wembeds.is_updated()), file=sys.stderr)
 
-        trainer = train_algo(self.model)
+        trainer_algo = TRAINER_MAP[learning_algo]
+        if learning_rate > 0:
+            ### TODO: better handling of additional learning-specific parameters
+            trainer = trainer_algo(self.model, learning_rate=learning_rate)
+        else:
+            # using default learning rate
+            trainer = trainer_algo(self.model)
 
         train_data = list(zip(train_X,train_Y, task_labels))
 
