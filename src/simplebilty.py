@@ -18,6 +18,7 @@ import pickle
 import dynet
 from collections import Counter
 
+from progress.bar import Bar
 
 from lib.mnnl import FFSequencePredictor, Layer, RNNSequencePredictor, BiRNNSequencePredictor
 from lib.mio import read_conll_file, load_embeddings_file
@@ -217,10 +218,12 @@ class SimpleBiltyTagger(object):
         if val_X is not None and val_Y is not None and model_path is not None:
             print('Using early stopping with patience of %d...' % patience)
         for cur_iter in range(num_epochs):
+            bar = Bar('Training epoch %d/%d...' % (cur_iter + 1, num_epochs),
+                      max=len(train_data), flush=True)
             total_loss=0.0
             total_tagged=0.0
             random.shuffle(train_data)
-            for ((word_indices,char_indices),y) in train_data:
+            for i, ((word_indices,char_indices), y) in enumerate(train_data):
                 if word_dropout_rate > 0.0:
                     word_indices = [self.w2i["_UNK"] if
                                         (random.random() > (widCount.get(w)/(word_dropout_rate+widCount.get(w))))
@@ -234,14 +237,15 @@ class SimpleBiltyTagger(object):
 
                 loss1.backward()
                 trainer.update()
+                bar.next()
 
             print("iter {2} {0:>12}: {1:.2f}".format("total loss",total_loss/total_tagged,cur_iter), file=sys.stderr)
 
-            # get the best accuracy on the validation set
-            val_correct, val_total = self.evaluate(val_X, val_Y)
-            val_accuracy = val_correct / val_total
-
             if val_X is not None and val_Y is not None and model_path is not None:
+                # get the best accuracy on the validation set
+                val_correct, val_total = self.evaluate(val_X, val_Y)
+                val_accuracy = val_correct / val_total
+
                 if val_accuracy > best_val_acc:
                     print('Accuracy %.4f is better than best val accuracy %.4f.' % (val_accuracy, best_val_acc))
                     best_val_acc = val_accuracy
@@ -452,7 +456,7 @@ class SimpleBiltyTagger(object):
         for i, ((word_indices, word_char_indices), gold_tag_indices) in enumerate(zip(test_X, test_Y)):
 
             output = self.predict(word_indices, word_char_indices)
-            predicted_tag_indices = [np.argmax(o.value()) for o in output]  
+            predicted_tag_indices = [np.argmax(o.value()) for o in output]
 
             correct += sum([1 for (predicted, gold) in zip(predicted_tag_indices, gold_tag_indices) if predicted == gold])
             total += len(gold_tag_indices)
