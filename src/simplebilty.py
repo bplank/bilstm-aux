@@ -118,8 +118,8 @@ def load(args):
                       activation=myparams["activation"])
     tagger.set_indices(myparams["w2i"],myparams["c2i"],myparams["tag2idx"])
     tagger.predictors, tagger.char_rnn, tagger.wembeds, tagger.cembeds = \
-        tagger.build_computation_graph(myparams["num_words"],
-                                       myparams["num_chars"])
+        tagger.initialize_graph(myparams["num_words"],
+                                myparams["num_chars"])
     tagger.model.populate(args.model)
     print("model loaded: {}".format(args.model), file=sys.stderr)
     return tagger
@@ -189,14 +189,6 @@ class SimpleBiltyTagger(object):
             print(">>> using seed: ", seed, file=sys.stderr)
             random.seed(seed) #setting random seed
 
-        # init lookup parameters and define graph
-        print("build graph",file=sys.stderr)
-        
-        num_words = len(self.w2i)
-        num_chars = len(self.c2i)
-        
-        self.predictors, self.char_rnn, self.wembeds, self.cembeds = self.build_computation_graph(num_words, num_chars)
-
         training_algo = TRAINER_MAP[train_algo]
 
         if learning_rate > 0:
@@ -258,39 +250,50 @@ class SimpleBiltyTagger(object):
                     print('No improvement for %d epochs. Early stopping...' % epochs_no_improvement)
                     break
 
-    def build_computation_graph(self, num_words, num_chars):
+    def initialize_graph(self, num_words=None, num_chars=None):
         """
         build graph and link to parameters
         """
+        num_words = num_words if num_words is not None else len(self.w2i)
+        num_chars = num_chars if num_chars is not None else len(self.c2i)
+        if num_words == 0 or num_chars == 0:
+            raise ValueError('Word2id and char2id have to be loaded before '
+                             'initializing the graph.')
+        print('Initializing the graph...')
+
         # initialize the word embeddings and the parameters
-        cembeds = None
+        self.cembeds = None
         if self.embeds_file:
             print("loading embeddings", file=sys.stderr)
             embeddings, emb_dim = load_embeddings_file(self.embeds_file)
             assert(emb_dim==self.in_dim)
             num_words=len(set(embeddings.keys()).union(set(self.w2i.keys()))) # initialize all with embeddings
             # init model parameters and initialize them
-            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim),init=dynet.ConstInitializer(0.01))
+            self.wembeds = self.model.add_lookup_parameters(
+                (num_words, self.in_dim),init=dynet.ConstInitializer(0.01))
 
             if self.c_in_dim > 0:
-                cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim),init=dynet.ConstInitializer(0.01))
+                self.cembeds = self.model.add_lookup_parameters(
+                    (num_chars, self.c_in_dim),init=dynet.ConstInitializer(0.01))
                
             init=0
             l = len(embeddings.keys())
             for word in embeddings.keys():
                 # for those words we have already in w2i, update vector, otherwise add to w2i (since we keep data as integers)
                 if word in self.w2i:
-                    wembeds.init_row(self.w2i[word], embeddings[word])
+                    self.wembeds.init_row(self.w2i[word], embeddings[word])
                 else:
                     self.w2i[word]=len(self.w2i.keys()) # add new word
-                    wembeds.init_row(self.w2i[word], embeddings[word])
+                    self.wembeds.init_row(self.w2i[word], embeddings[word])
                 init+=1
             print("initialized: {}".format(init), file=sys.stderr)
 
         else:
-            wembeds = self.model.add_lookup_parameters((num_words, self.in_dim),init=dynet.ConstInitializer(0.01))
+            self.wembeds = self.model.add_lookup_parameters(
+                (num_words, self.in_dim),init=dynet.ConstInitializer(0.01))
             if self.c_in_dim > 0:
-                cembeds = self.model.add_lookup_parameters((num_chars, self.c_in_dim),init=dynet.ConstInitializer(0.01))
+                self.cembeds = self.model.add_lookup_parameters(
+                    (num_chars, self.c_in_dim),init=dynet.ConstInitializer(0.01))
 
         #make it more flexible to add number of layers as specified by parameter
         layers = [] # inner layers
@@ -317,16 +320,18 @@ class SimpleBiltyTagger(object):
         output_layer = FFSequencePredictor(Layer(self.model, self.h_dim*2, task_num_labels, dynet.softmax))
 
         if self.c_in_dim > 0:
-            char_rnn = BiRNNSequencePredictor(dynet.CoupledLSTMBuilder(1, self.c_in_dim, self.c_in_dim, self.model), dynet.CoupledLSTMBuilder(1, self.c_in_dim, self.c_in_dim, self.model))
+            self.char_rnn = BiRNNSequencePredictor(
+                dynet.CoupledLSTMBuilder(
+                    1, self.c_in_dim, self.c_in_dim, self.model),
+                dynet.CoupledLSTMBuilder(
+                    1, self.c_in_dim, self.c_in_dim, self.model))
         else:
-            char_rnn = None
+            self.char_rnn = None
 
-        predictors = {}
-        predictors["inner"] = layers
-        predictors["output_layers_dict"] = output_layer
-        predictors["task_expected_at"] = self.h_layers
-
-        return predictors, char_rnn, wembeds, cembeds
+        self.predictors = dict()
+        self.predictors["inner"] = layers
+        self.predictors["output_layers_dict"] = output_layer
+        self.predictors["task_expected_at"] = self.h_layers
 
     def get_features(self, words):
         """
