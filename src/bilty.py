@@ -71,10 +71,6 @@ def main():
     if args.output is not None:
         assert os.path.exists(os.path.dirname(args.output))
 
-    if not os.path.exists(os.path.dirname(args.save)):
-        print('Creating %s...' % os.path.dirname(args.save))
-        os.makedirs(os.path.dirname(args.save))
-
     if args.train:
         if not args.pred_layer:
             print("--pred_layer required!")
@@ -94,9 +90,9 @@ def main():
     if args.save:
         # check if folder exists
         if os.path.isdir(args.save):
-            modeldir = os.path.dirname(args.save)
-            if not os.path.exists(modeldir):
-                os.makedirs(modeldir)
+            if not os.path.exists(args.save):
+                print("Creating {}..".format(args.save))
+                os.makedirs(args.save)
 
     if args.output:
         if os.path.isdir(args.output):
