@@ -168,8 +168,11 @@ class SimpleBiltyTagger(object):
         self.embeds_file = embeds_file
         self.char_rnn = None # RNN for character input
 
-
     def pick_neg_log(self, pred, gold):
+        if not isinstance(gold, int):
+            # calculate cross-entropy loss against the whole vector
+            dy_gold = dynet.inputVector(gold)
+            return -dynet.sum_elems(dynet.cmult(dy_gold, dynet.log(pred)))
         return -dynet.log(dynet.pick(pred, gold))
 
     def set_indices(self, w2i, c2i, tag2idx):
@@ -391,7 +394,8 @@ class SimpleBiltyTagger(object):
             org_Y.append(tags)
         return X, Y  # , org_X, org_Y - for now don't use
 
-    def predict(self, word_indices, char_indices, train=False):
+    def predict(self, word_indices, char_indices, train=False,
+                soft_labels=False, temperature=None):
         """
         predict tags for a sentence represented as char+word embeddings
         """
@@ -439,10 +443,11 @@ class SimpleBiltyTagger(object):
             if i == output_expected_at_layer:
                 output_predictor = self.predictors["output_layers_dict"]
                 concat_layer = [dynet.concatenate([f, b]) for f, b in zip(forward_sequence,reversed(backward_sequence))]
-
                 if train and self.noise_sigma > 0.0:
                     concat_layer = [dynet.noise(fe,self.noise_sigma) for fe in concat_layer]
-                output = output_predictor.predict_sequence(concat_layer)
+                output = output_predictor.predict_sequence(
+                    concat_layer, soft_labels=soft_labels,
+                    temperature=temperature)
                 return output
 
             prev = forward_sequence

@@ -19,8 +19,8 @@ class FFSequencePredictor(SequencePredictor):
     def __init__(self, network_builder):
         self.network_builder = network_builder
         
-    def predict_sequence(self, inputs):
-        return [self.network_builder(x) for x in inputs]
+    def predict_sequence(self, inputs, **kwargs):
+        return [self.network_builder(x, **kwargs) for x in inputs]
 
 
 class RNNSequencePredictor(SequencePredictor):
@@ -65,7 +65,7 @@ class Layer:
         self.W = model.add_parameters((output_dim, mlp_dim))
         self.b = model.add_parameters((output_dim))
         
-    def __call__(self, x):
+    def __call__(self, x, soft_labels=False, temperature=None):
         if self.mlp:
             W_mlp = dynet.parameter(self.W_mlp)
             b_mlp = dynet.parameter(self.b_mlp)
@@ -76,5 +76,11 @@ class Layer:
         # from params to expressions
         W = dynet.parameter(self.W)
         b = dynet.parameter(self.b)
-        return self.act(W*x_in + b)
 
+        logits = W*x_in + b
+        if soft_labels and temperature:
+            # calculate the soft labels smoothed with the temperature
+            # see Distilling the Knowledge in a Neural Network
+            elems = dynet.exp(logits / temperature)
+            return dynet.cdiv(elems, dynet.sum_elems(elems))
+        return self.act(logits)
