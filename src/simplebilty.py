@@ -473,6 +473,13 @@ class SimpleBiltyTagger(object):
 
         return correct, total
 
+    def get_predictions(self, test_X):
+        predictions = []
+        for word_indices, word_char_indices in test_X:
+            output = self.predict(word_indices, word_char_indices)
+            predictions += [int(np.argmax(o.value())) for o in output]
+        return predictions
+
     def get_train_data_from_instances(self, train_words, train_tags):
         """
         Extension of get_train_data method. Extracts training data from two arrays of word and label lists.
