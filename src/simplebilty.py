@@ -381,7 +381,10 @@ class SimpleBiltyTagger(object):
 
         for (words, tags) in zip(dev_words, dev_tags):
             word_indices, word_char_indices = self.get_features(words)
-            tag_indices = [self.tag2idx.get(tag) for tag in tags]
+            # if tag does not exist in source domain tags, return as default
+            # first idx outside of dictionary
+            tag_indices = [self.tag2idx.get(
+                tag, len(self.tag2idx)) for tag in tags]
             X.append((word_indices, word_char_indices))
             Y.append(tag_indices)
             org_X.append(words)
@@ -466,6 +469,13 @@ class SimpleBiltyTagger(object):
             total += len(gold_tag_indices)
 
         return correct, total
+
+    def get_predictions(self, test_X):
+        predictions = []
+        for word_indices, word_char_indices in test_X:
+            output = self.predict(word_indices, word_char_indices)
+            predictions += [int(np.argmax(o.value())) for o in output]
+        return predictions
 
     def get_train_data_from_instances(self, train_words, train_tags):
         """
