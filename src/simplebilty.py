@@ -387,7 +387,10 @@ class SimpleBiltyTagger(object):
 
         for (words, tags) in zip(dev_words, dev_tags):
             word_indices, word_char_indices = self.get_features(words)
-            tag_indices = [self.tag2idx.get(tag) for tag in tags]
+            # if tag does not exist in source domain tags, return as default
+            # first idx outside of dictionary
+            tag_indices = [self.tag2idx.get(
+                tag, len(self.tag2idx)) for tag in tags]
             X.append((word_indices, word_char_indices))
             Y.append(tag_indices)
             org_X.append(words)
