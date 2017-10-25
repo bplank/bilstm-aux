@@ -62,7 +62,7 @@ def main():
     print(">> Running simplebilty <<", file=sys.stderr)
     if args.model:
         print("loading model from file {}".format(args.model), file=sys.stderr)
-        tagger = load(args)
+        tagger = load_tagger(args.model)
     else:
         tagger = SimpleBiltyTagger(args.in_dim,
                               args.h_dim,
@@ -82,7 +82,7 @@ def main():
 
         tagger.fit(train_X, train_Y, args.iters, args.trainer, learning_rate=args.learning_rate, seed=args.dynet_seed, word_dropout_rate=args.word_dropout_rate)
         if args.save:
-            save(tagger, args)
+            save_tagger(tagger, args.model)
 
     if args.test:
         stdout = sys.stdout
@@ -106,35 +106,29 @@ def main():
     if args.save_embeds:
         tagger.save_embeds(args.save_embeds)
 
-def load(args):
+def load_tagger(path_to_model):
     """
     load a model from file; specify the .model file, it assumes the *pickle file in the same location
     """
-    myparams = pickle.load(open(args.model+".pickle", "rb"))
+    myparams = pickle.load(open(path_to_model+".pickle", "rb"))
     tagger = SimpleBiltyTagger(myparams["in_dim"],
                       myparams["h_dim"],
                       myparams["c_in_dim"],
                       myparams["h_layers"],
                       activation=myparams["activation"])
     tagger.set_indices(myparams["w2i"],myparams["c2i"],myparams["tag2idx"])
-    tagger.predictors, tagger.char_rnn, tagger.wembeds, tagger.cembeds = \
-        tagger.initialize_graph(myparams["num_words"],
-                                myparams["num_chars"])
-    tagger.model.populate(args.model)
-    print("model loaded: {}".format(args.model), file=sys.stderr)
+    tagger.initialize_graph()
+    tagger.model.populate(path_to_model)
+    print("model loaded: {}".format(path_to_model), file=sys.stderr)
     return tagger
 
-def save(nntagger, args):
+def save_tagger(nntagger, path_to_model):
     """
     save a model; dynet only saves the parameters, need to store the rest separately
     """
-    outdir = args.save
-    modelname = outdir + ".model"
+    modelname = path_to_model + ".model"
     nntagger.model.save(modelname)
-    import pickle
-    myparams = {"num_words": len(nntagger.w2i),
-                "num_chars": len(nntagger.c2i),
-                "w2i": nntagger.w2i,
+    myparams = {"w2i": nntagger.w2i,
                 "c2i": nntagger.c2i,
                 "tag2idx": nntagger.tag2idx,
                 "activation": nntagger.activation,
