@@ -28,6 +28,6 @@ print(correct, total, correct/total)
 # test loading/saving
 save_tagger(tagger, "tmp")
 
-tagger2= load_tagger("tmp.model")
+tagger2= load_tagger("tmp")
 correct, total = tagger2.evaluate(test_X, test_Y)
 print(correct, total, correct/total)

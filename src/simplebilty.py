@@ -110,7 +110,7 @@ def load_tagger(path_to_model):
     """
     load a model from file; specify the .model file, it assumes the *pickle file in the same location
     """
-    myparams = pickle.load(open(path_to_model+".pickle", "rb"))
+    myparams = pickle.load(open(path_to_model + ".params.pickle", "rb"))
     tagger = SimpleBiltyTagger(myparams["in_dim"],
                       myparams["h_dim"],
                       myparams["c_in_dim"],
@@ -118,7 +118,7 @@ def load_tagger(path_to_model):
                       activation=myparams["activation"])
     tagger.set_indices(myparams["w2i"],myparams["c2i"],myparams["tag2idx"])
     tagger.initialize_graph()
-    tagger.model.populate(path_to_model)
+    tagger.model.populate(path_to_model + '.model')
     print("model loaded: {}".format(path_to_model), file=sys.stderr)
     return tagger
 
@@ -137,7 +137,7 @@ def save_tagger(nntagger, path_to_model):
                 "c_in_dim": nntagger.c_in_dim,
                 "h_layers": nntagger.h_layers
                 }
-    pickle.dump(myparams, open( modelname+".pickle", "wb" ) )
+    pickle.dump(myparams, open(path_to_model + ".params.pickle", "wb" ) )
     print("model stored: {}".format(modelname), file=sys.stderr)
 
 
@@ -239,7 +239,7 @@ class SimpleBiltyTagger(object):
                     print('Accuracy %.4f is better than best val accuracy %.4f.' % (val_accuracy, best_val_acc))
                     best_val_acc = val_accuracy
                     epochs_no_improvement = 0
-                    save(self, model_path)
+                    save_tagger(self, model_path)
                 else:
                     print('Accuracy %.4f is worse than best val loss %.4f.' % (val_accuracy, best_val_acc))
                     epochs_no_improvement += 1
