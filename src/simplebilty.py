@@ -176,9 +176,14 @@ class SimpleBiltyTagger(object):
 
     def fit(self, train_X, train_Y, num_epochs, train_algo, val_X=None,
             val_Y=None, patience=2, model_path=None, seed=None,
-            word_dropout_rate=0.25, learning_rate=0):
+            word_dropout_rate=0.25, learning_rate=0, trg_vectors=None,
+            unsup_weight=1.0):
         """
         train the tagger
+        :param trg_vectors: the prediction targets used for the unsupervised loss
+                            in temporal ensembling
+        :param unsup_weight: weight for the unsupervised consistency loss
+                                    used in temporal ensembling
         """
         print("read training data",file=sys.stderr)
 
@@ -212,6 +217,7 @@ class SimpleBiltyTagger(object):
             total_loss=0.0
             total_tagged=0.0
             random.shuffle(train_data)
+            trg_start_id = 0
             for i, ((word_indices,char_indices), y) in enumerate(train_data):
                 if word_dropout_rate > 0.0:
                     word_indices = [self.w2i["_UNK"] if
@@ -219,12 +225,30 @@ class SimpleBiltyTagger(object):
                                         else w for w in word_indices]
                 output = self.predict(word_indices, char_indices, train=True)
 
-                loss1 = dynet.esum([self.pick_neg_log(pred,gold) for pred, gold in zip(output, y)])
-                lv = loss1.value()
-                total_loss += lv
+                if len(y) == 1 and y[0] == 0:
+                    # in temporal ensembling, we assign a dummy label of [0] for
+                    # unlabeled sequences; we skip the supervised loss for these
+                    loss = dynet.scalarInput(0)
+                else:
+                    # use average instead of sum here so long sequences are not
+                    # preferred and so it can be combined with aux loss
+                    loss = dynet.average([self.pick_neg_log(pred,gold) for
+                                          pred, gold in zip(output, y)])
+
+                if trg_vectors is not None:
+                    # the consistency loss in temporal ensembling is used for
+                    # both supervised and unsupervised input
+                    targets = trg_vectors[trg_start_id:trg_start_id+len(y), :]
+                    other_loss = unsup_weight * dynet.average(
+                        [dynet.squared_distance(o, dynet.inputVector(t))
+                         for o, t in zip(output, targets)])
+                    loss += other_loss
+                    trg_start_id += len(y)
+
+                total_loss += loss.value()
                 total_tagged += len(word_indices)
 
-                loss1.backward()
+                loss.backward()
                 trainer.update()
                 bar.next()
 
@@ -470,11 +494,12 @@ class SimpleBiltyTagger(object):
 
         return correct, total
 
-    def get_predictions(self, test_X):
+    def get_predictions(self, test_X, soft_labels=False):
         predictions = []
         for word_indices, word_char_indices in test_X:
             output = self.predict(word_indices, word_char_indices)
-            predictions += [int(np.argmax(o.value())) for o in output]
+            predictions += [o.value() if soft_labels else
+                            int(np.argmax(o.value())) for o in output]
         return predictions
 
     def get_train_data_from_instances(self, train_words, train_tags):
