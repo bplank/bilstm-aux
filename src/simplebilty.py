@@ -230,10 +230,14 @@ class SimpleBiltyTagger(object):
                     # unlabeled sequences; we skip the supervised loss for these
                     loss = dynet.scalarInput(0)
                 else:
-                    # use average instead of sum here so long sequences are not
-                    # preferred and so it can be combined with aux loss
-                    loss = dynet.average([self.pick_neg_log(pred,gold) for
-                                          pred, gold in zip(output, y)])
+                    if trg_vectors:
+                        # use average instead of sum here so long sequences are not
+                        # preferred and so it can be combined with aux loss
+                        loss = dynet.average([self.pick_neg_log(pred,gold) for
+                                              pred, gold in zip(output, y)])
+                    else:
+                        loss = dynet.esum([self.pick_neg_log(pred,gold) for
+                                              pred, gold in zip(output, y)])
 
                 if trg_vectors is not None:
                     # the consistency loss in temporal ensembling is used for
