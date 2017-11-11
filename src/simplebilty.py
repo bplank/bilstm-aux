@@ -245,8 +245,14 @@ class SimpleBiltyTagger(object):
                     # unlabeled sequences; we skip the supervised loss for these
                     loss = dynet.scalarInput(0)
                 else:
-                    loss = dynet.esum([self.pick_neg_log(pred,gold) for
-                                          pred, gold in zip(output, y)])
+                    if trg_vectors:
+                        # use average instead of sum here so long sequences are not
+                        # preferred and so it can be combined with aux loss
+                        loss = dynet.average([self.pick_neg_log(pred,gold) for
+                                              pred, gold in zip(output, y)])
+                    else:
+                        loss = dynet.esum([self.pick_neg_log(pred,gold) for
+                                              pred, gold in zip(output, y)])
 
                 if trg_vectors is not None:
                     # the consistency loss in temporal ensembling is used for
@@ -309,7 +315,7 @@ class SimpleBiltyTagger(object):
             if self.c_in_dim > 0:
                 self.cembeds = self.model.add_lookup_parameters(
                     (num_chars, self.c_in_dim),init=dynet.ConstInitializer(0.01), name="cembeds".encode("utf-8"))
-               
+
             init=0
             l = len(embeddings.keys())
             for word in embeddings.keys():
@@ -426,6 +432,7 @@ class SimpleBiltyTagger(object):
             org_X.append(words)
             org_Y.append(tags)
         return X, Y  # , org_X, org_Y - for now don't use
+
 
     def predict(self, word_indices, char_indices, train=False,
                 soft_labels=False, temperature=None):
