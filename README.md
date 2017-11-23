@@ -75,7 +75,7 @@ downloaded from [here](http://www.let.rug.nl/bplank/bilty/embeds.tar.gz) (0.6GB)
 You can see the options by running:
 
 ```
-python src/bilty.sh --help
+python src/bilty.py --help
 ```
 
 A great option is DyNet autobatching ([Neubig et al.,
