@@ -47,6 +47,7 @@ def main():
     parser.add_argument("--dynet-autobatch", help="activate autobatching if set to 1", required=False, type=int, default=0)
     parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0.25], if 0=disabled, recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0.25, type=float)
     parser.add_argument("--save-embeds", help="save word embeddings file", required=False, default=None)
+    parser.add_argument("--patience", help="patience [default: 0=not used], requires --dev and model path with --save", required=False, default=0, type=int)
 
     args = parser.parse_args()
 
@@ -76,6 +77,7 @@ def main():
         ## read data
         train_X, train_Y = tagger.get_train_data(args.train)
 
+        dev_X, dev_Y = [],[]
         if args.dev:
             dev_X, dev_Y = tagger.get_data_as_indices(args.dev)
 
@@ -84,10 +86,14 @@ def main():
             tagger.reload_parameters(args.model)
         else:
             tagger.initialize_graph()
-        tagger.fit(train_X, train_Y, args.iters, args.trainer,
+        tagger.fit(train_X, train_Y, args.iters, args.trainer, patience=args.patience, val_X=dev_X, val_Y=dev_Y, model_path=args.save,
                    learning_rate=args.learning_rate, seed=args.dynet_seed, word_dropout_rate=args.word_dropout_rate)
-        if args.save:
+        if args.save and not args.patience: # in case patience is active it gets saved in the fit function
             save_tagger(tagger, args.save)
+
+        if args.patience:
+            # reload patience 2 model
+            tagger = load_tagger(args.save)
 
     if args.test:
         stdout = sys.stdout
@@ -176,7 +182,7 @@ class SimpleBiltyTagger(object):
         self.c2i = c2i
 
     def fit(self, train_X, train_Y, num_epochs, train_algo, val_X=None,
-            val_Y=None, patience=2, model_path=None, seed=None,
+            val_Y=None, patience=0, model_path=None, seed=None,
             word_dropout_rate=0.25, learning_rate=0, trg_vectors=None,
             unsup_weight=1.0):
         """
@@ -218,7 +224,10 @@ class SimpleBiltyTagger(object):
             assert trg_start_id == len(trg_vectors),\
                 'Error: Idx %d is not at %d.' % (trg_start_id, len(trg_vectors))
 
-        print('Starting training for %d epochs...' % num_epochs)
+        print('Starting training for %d epochs...' % (num_epochs))
+        if patience and not (val_X and model_path):
+            print("Patience requires a model path (--save) and dev set (--dev)")
+            exit()
         best_val_acc, epochs_no_improvement = 0., 0
         if val_X is not None and val_Y is not None and model_path is not None:
             print('Using early stopping with patience of %d...' % patience)
@@ -310,11 +319,11 @@ class SimpleBiltyTagger(object):
             num_words=len(set(embeddings.keys()).union(set(self.w2i.keys()))) # initialize all with embeddings
             # init model parameters and initialize them
             self.wembeds = self.model.add_lookup_parameters(
-                (num_words, self.in_dim),init=dynet.ConstInitializer(0.01), name="wembeds".encode("utf-8"))
+                (num_words, self.in_dim),init=dynet.ConstInitializer(0.01))
 
             if self.c_in_dim > 0:
                 self.cembeds = self.model.add_lookup_parameters(
-                    (num_chars, self.c_in_dim),init=dynet.ConstInitializer(0.01), name="cembeds".encode("utf-8"))
+                    (num_chars, self.c_in_dim),init=dynet.ConstInitializer(0.01))
 
             init=0
             l = len(embeddings.keys())
@@ -330,10 +339,10 @@ class SimpleBiltyTagger(object):
 
         else:
             self.wembeds = self.model.add_lookup_parameters(
-                (num_words, self.in_dim),init=dynet.ConstInitializer(0.01), name="wembeds".encode("utf-8"))
+                (num_words, self.in_dim),init=dynet.ConstInitializer(0.01))
             if self.c_in_dim > 0:
                 self.cembeds = self.model.add_lookup_parameters(
-                    (num_chars, self.c_in_dim),init=dynet.ConstInitializer(0.01), name="cembeds".encode("utf-8"))
+                    (num_chars, self.c_in_dim),init=dynet.ConstInitializer(0.01))
 
         # make it more flexible to add number of layers as specified by parameter
         layers = [] # inner layers
@@ -615,22 +624,6 @@ class SimpleBiltyTagger(object):
         """
         train_words, train_tags = self.__get_instances_from_file(train_data)
         return self.get_train_data_from_instances(train_words, train_tags)
-
-    def reload_parameters(self, path_to_model):
-        """
-        before running fit() again, re-initialize model to account for new words/chars
-        """
-        self.wembeds = self.model.add_lookup_parameters(
-            (len(self.w2i), self.in_dim), init=dynet.ConstInitializer(0.01), name="wembeds".encode("utf-8"))
-        model_path = path_to_model + '.model'
-        self.wembeds.populate(model_path, "/wembeds")
-
-        # char embeds
-        self.cembeds = self.model.add_lookup_parameters(
-            (len(self.c2i), self.c_in_dim), init=dynet.ConstInitializer(0.01), name="cembeds".encode("utf-8"))
-        model_path = path_to_model + '.model'
-        self.cembeds.populate(model_path, "/cembeds")
-        print("wembeds/cembeds ({}/{}) re-initialized from {} ".format(len(self.w2i), len(self.c2i), model_path))
 
 
 
