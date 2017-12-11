@@ -81,11 +81,7 @@ def main():
         if args.dev:
             dev_X, dev_Y = tagger.get_data_as_indices(args.dev)
 
-        if args.model:
-            # load models from existing file
-            tagger.reload_parameters(args.model)
-        else:
-            tagger.initialize_graph()
+        tagger.initialize_graph()
         tagger.fit(train_X, train_Y, args.iters, args.trainer, patience=args.patience, val_X=dev_X, val_Y=dev_Y, model_path=args.save,
                    learning_rate=args.learning_rate, seed=args.dynet_seed, word_dropout_rate=args.word_dropout_rate)
         if args.save and not args.patience: # in case patience is active it gets saved in the fit function

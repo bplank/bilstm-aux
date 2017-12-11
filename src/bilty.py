@@ -48,7 +48,7 @@ def main():
     parser.add_argument("--ac-mlp", help="activation function for MLP (if used) [rectify, tanh, ...]", default="rectify", choices=ACTIVATION_MAP.keys())
     parser.add_argument("--trainer", help="trainer [default: sgd]", required=False, choices=TRAINER_MAP.keys(), default="sgd")
     parser.add_argument("--learning-rate", help="learning rate [0: use default]", default=0, type=float) # see: http://dynet.readthedocs.io/en/latest/optimizers.html
-    parser.add_argument("--patience", help="patience [default: -1=not used], requires specification of a dev set with --dev", required=False, default=-1, type=int)
+    parser.add_argument("--patience", help="patience [default: 0=not used], requires specification of --dev and model path --save", required=False, default=-1, type=int)
     parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0.25], if 0=disabled, recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0.25, type=float)
 
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
@@ -86,6 +86,11 @@ def main():
 
     if args.minibatch_size > 1:
         print(">>> using minibatch_size {} <<<".format(args.minibatch_size))
+
+    if args.patience:
+        if not args.dev or not args.save:
+            print("patience requires a dev set and model path (--dev and --save)")
+            exit()
 
     if args.save:
         # check if folder exists
@@ -126,8 +131,13 @@ def main():
         tagger.fit(args.train, args.iters, args.trainer,
                    dev=args.dev, word_dropout_rate=args.word_dropout_rate,
                    model_path=args.save, patience=args.patience, minibatch_size=args.minibatch_size)
-        if args.save:
+
+        if args.save and not args.patience:  # in case patience is active it gets saved in the fit function
             save(tagger, args.save)
+
+        if args.patience:
+            # reload patience 2 model
+            tagger = load(args.save)
 
     if args.test and len( args.test ) != 0:
         if not args.model:
@@ -168,11 +178,11 @@ def main():
         tagger.save_embeds(args.save_embeds)
 
 
-def load(args):
+def load(model_path):
     """
     load a model from file; specify the .model file, it assumes the *pickle file in the same location
     """
-    myparams = pickle.load(open(args.model+".pickle", "rb"))
+    myparams = pickle.load(open(model_path+".params.pickle", "rb"))
     tagger = NNTagger(myparams["in_dim"],
                       myparams["h_dim"],
                       myparams["c_in_dim"],
@@ -188,8 +198,8 @@ def load(args):
     tagger.predictors, tagger.char_rnn, tagger.wembeds, tagger.cembeds = \
         tagger.build_computation_graph(myparams["num_words"],
                                        myparams["num_chars"])
-    tagger.model.populate(args.model)
-    print("model loaded: {}".format(args.model), file=sys.stderr)
+    tagger.model.populate(model_path+".model")
+    print("model loaded: {}".format(model_path), file=sys.stderr)
     return tagger
 
 
@@ -216,7 +226,7 @@ def save(nntagger, model_path):
                 "pred_layer": nntagger.pred_layer,
                 "builder": nntagger.builder,
                 }
-    pickle.dump(myparams, open( modelname+".pickle", "wb" ) )
+    pickle.dump(myparams, open( model_path+".params.pickle", "wb" ) )
     print("model stored: {}".format(modelname), file=sys.stderr)
 
 
