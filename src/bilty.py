@@ -424,7 +424,7 @@ class NNTagger(object):
                     wembeds.init_row(id_, embeddings[word])
                     init += 1
                 elif word.lower() in embeddings:
-                    wembeds.init_row(id_, embeddings[word])
+                    wembeds.init_row(id_, embeddings[word.lower()])
                     init += 1
             print("initialized: {}".format(init), file=sys.stderr)
 
