@@ -146,7 +146,7 @@ def save_tagger(nntagger, path_to_model):
 
 class SimpleBiltyTagger(object):
 
-    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,embeds_file=None,
+    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,train_algo="adam", learning_rate=0,embeds_file=None,
                  activation=dynet.tanh, noise_sigma=0.1,
                  word2id=None):
         self.w2i = {} if word2id is None else word2id  # word to index mapping
@@ -164,6 +164,11 @@ class SimpleBiltyTagger(object):
         self.cembeds = None # lookup: embeddings for characters
         self.embeds_file = embeds_file
         self.char_rnn = None # RNN for character input
+        training_algo = TRAINER_MAP[train_algo]
+        if learning_rate > 0:
+            self.trainer = training_algo(self.model, learning_rate=learning_rate)
+        else:
+            self.trainer = training_algo(self.model)
 
     def pick_neg_log(self, pred, gold):
         if not isinstance(gold, int):
@@ -177,10 +182,9 @@ class SimpleBiltyTagger(object):
         self.w2i = w2i
         self.c2i = c2i
 
-    def fit(self, train_X, train_Y, num_epochs, train_algo, val_X=None,
+    def fit(self, train_X, train_Y, num_epochs, val_X=None,
             val_Y=None, patience=0, model_path=None, seed=None,
-            word_dropout_rate=0.25, learning_rate=0, trg_vectors=None,
-            unsup_weight=1.0):
+            word_dropout_rate=0.25, trg_vectors=None, unsup_weight=1.0):
         """
         train the tagger
         :param trg_vectors: the prediction targets used for the unsupervised loss
@@ -193,13 +197,6 @@ class SimpleBiltyTagger(object):
         if seed:
             print(">>> using seed: ", seed, file=sys.stderr)
             random.seed(seed) #setting random seed
-
-        training_algo = TRAINER_MAP[train_algo]
-
-        if learning_rate > 0:
-            trainer = training_algo(self.model, learning_rate=learning_rate)
-        else:
-            trainer = training_algo(self.model)
 
         # if we use word dropout keep track of counts
         if word_dropout_rate > 0.0:
@@ -273,7 +270,7 @@ class SimpleBiltyTagger(object):
                 total_tagged += len(word_indices)
 
                 loss.backward()
-                trainer.update()
+                self.trainer.update()
                 bar.next()
 
             print("iter {2} {0:>12}: {1:.2f}".format("total loss",total_loss/total_tagged,cur_iter), file=sys.stderr)

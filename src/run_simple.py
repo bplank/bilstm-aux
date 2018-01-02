@@ -20,7 +20,7 @@ trainer="sgd"
 tagger = SimpleBiltyTagger(in_dim, h_dim,c_in_dim,h_layers,embeds_file=None)
 train_X, train_Y = tagger.get_train_data(train_data)
 tagger.initialize_graph()
-tagger.fit(train_X, train_Y, iters, trainer,seed=seed)
+tagger.fit(train_X, train_Y, iters,seed=seed)
 test_X, test_Y = tagger.get_data_as_indices(dev_data)
 correct, total = tagger.evaluate(test_X, test_Y)
 print(correct, total, correct/total)

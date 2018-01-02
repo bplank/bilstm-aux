@@ -20,7 +20,7 @@ tagger = SimpleBiltyTagger(in_dim, h_dim,c_in_dim,h_layers,embeds_file=None)
 train_X, train_Y = tagger.get_train_data(train_data)
 dev_X, dev_Y = tagger.get_data_as_indices(dev_data)
 tagger.initialize_graph()
-tagger.fit(train_X, train_Y, iters, trainer, val_X=dev_X, val_Y=dev_Y, patience=2, model_path="tmp")
+tagger.fit(train_X, train_Y, iters, val_X=dev_X, val_Y=dev_Y, patience=2, model_path="tmp")
 # make sure to reload to get patience 2 model
 tagger = load_tagger("tmp")
 test_X, test_Y = tagger.get_data_as_indices(test_data)
