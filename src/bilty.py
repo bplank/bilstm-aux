@@ -18,7 +18,7 @@ import codecs
 
 from sklearn.model_selection import train_test_split
 
-from collections import Counter
+from collections import Counter, defaultdict
 from lib.mnnl import FFSequencePredictor, Layer, RNNSequencePredictor, BiRNNSequencePredictor
 from lib.mio import read_conll_file, load_embeddings_file
 
@@ -49,6 +49,7 @@ def main():
     parser.add_argument("--trainer", help="trainer [default: sgd]", required=False, choices=TRAINER_MAP.keys(), default="sgd")
     parser.add_argument("--learning-rate", help="learning rate [0: use default]", default=0, type=float) # see: http://dynet.readthedocs.io/en/latest/optimizers.html
     parser.add_argument("--patience", help="patience [default: 0=not used], requires specification of --dev and model path --save", required=False, default=-1, type=int)
+    parser.add_argument("--log-losses", help="log loss (for each task if multiple active)", required=False, action="store_true", default=False)
     parser.add_argument("--word-dropout-rate", help="word dropout rate [default: 0.25], if 0=disabled, recommended: 0.25 (Kipperwasser & Goldberg, 2016)", required=False, default=0.25, type=float)
 
     parser.add_argument("--dynet-seed", help="random seed for dynet (needs to be first argument!)", required=False, type=int)
@@ -121,6 +122,8 @@ def main():
                           mlp=args.mlp,
                           activation_mlp=ACTIVATION_MAP[args.ac_mlp],
                           noise_sigma=args.sigma,
+                          learning_algo=args.trainer,
+                          learning_rate=args.learning_rate,
                           backprob_embeds=args.disable_backprob_embeds,
                           initializer=INITIALIZER_MAP[args.initializer],
                           builder=BUILDERS[args.builder],
@@ -128,9 +131,9 @@ def main():
                           )
 
     if args.train and len( args.train ) != 0:
-        tagger.fit(args.train, args.iters, args.trainer,
+        tagger.fit(args.train, args.iters,
                    dev=args.dev, word_dropout_rate=args.word_dropout_rate,
-                   model_path=args.save, patience=args.patience, minibatch_size=args.minibatch_size)
+                   model_path=args.save, patience=args.patience, minibatch_size=args.minibatch_size, log_losses=args.log_losses)
 
         if args.save and not args.patience:  # in case patience is active it gets saved in the fit function
             save(tagger, args.save)
@@ -232,7 +235,8 @@ def save(nntagger, model_path):
 
 class NNTagger(object):
 
-    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,embeds_file=None,activation=ACTIVATION_MAP["tanh"],mlp=0,activation_mlp=ACTIVATION_MAP["rectify"],
+    def __init__(self,in_dim,h_dim,c_in_dim,h_layers,pred_layer,learning_algo="sgd", learning_rate=0,
+                 embeds_file=None,activation=ACTIVATION_MAP["tanh"],mlp=0,activation_mlp=ACTIVATION_MAP["rectify"],
                  backprob_embeds=True,noise_sigma=0.1, tasks_ids=[],
                  initializer=INITIALIZER_MAP["glorot"], builder=BUILDERS["lstmc"],
                  max_vocab_size=None):
@@ -254,6 +258,13 @@ class NNTagger(object):
         self.wembeds = None # lookup: embeddings for words
         self.cembeds = None # lookup: embeddings for characters
         self.embeds_file = embeds_file
+        trainer_algo = TRAINER_MAP[learning_algo]
+        if learning_rate > 0:
+            ### TODO: better handling of additional learning-specific parameters
+            self.trainer = trainer_algo(self.model, learning_rate=learning_rate)
+        else:
+            # using default learning rate
+            self.trainer = trainer_algo(self.model)
         self.backprob_embeds = backprob_embeds
         self.initializer = initializer
         self.char_rnn = None # biRNN for character input
@@ -270,13 +281,15 @@ class NNTagger(object):
         self.w2i = w2i
         self.c2i = c2i
 
-    def fit(self, list_folders_name, num_iterations, learning_algo, learning_rate=0, dev=None, word_dropout_rate=0.0, model_path=None, patience=0, minibatch_size=0):
+    def fit(self, list_folders_name, num_iterations, dev=None, word_dropout_rate=0.0, model_path=None, patience=0, minibatch_size=0, log_losses=False):
         """
         train the tagger
         """
         print("read training data",file=sys.stderr)
 
         nb_tasks = len( list_folders_name )
+
+        losses = {} # log losses
 
         train_X, train_Y, task_labels, w2i, c2i, task2t2i = self.get_train_data(list_folders_name)
 
@@ -319,14 +332,6 @@ class NNTagger(object):
             self.wembeds.set_updated(False)
             print(">>> disable wembeds update <<< (is updated: {})".format(self.wembeds.is_updated()), file=sys.stderr)
 
-        trainer_algo = TRAINER_MAP[learning_algo]
-        if learning_rate > 0:
-            ### TODO: better handling of additional learning-specific parameters
-            trainer = trainer_algo(self.model, learning_rate=learning_rate)
-        else:
-            # using default learning rate
-            trainer = trainer_algo(self.model)
-
         train_data = list(zip(train_X,train_Y, task_labels))
 
         best_val_acc, epochs_no_improvement = 0.0, 0
@@ -341,12 +346,19 @@ class NNTagger(object):
             total_loss=0.0
             total_tagged=0.0
             random.shuffle(train_data)
+
+            loss_accum_loss = defaultdict(float)
+            loss_accum_tagged = defaultdict(float)
+
             for ((word_indices,char_indices),y, task_of_instance) in train_data:
 
                 if word_dropout_rate > 0.0:
                     word_indices = [self.w2i[UNK] if
                                         (random.random() > (widCount.get(w)/(word_dropout_rate+widCount.get(w))))
                                         else w for w in word_indices]
+
+                if task_of_instance not in losses:
+                    losses[task_of_instance] = [] #initialize
 
                 if minibatch_size > 1:
                     # accumulate instances for minibatch update
@@ -358,8 +370,13 @@ class NNTagger(object):
                     if len(batch) == minibatch_size:
                         loss = dynet.esum(batch)
                         total_loss += loss.value()
+
+                        # logging
+                        loss_accum_tagged[task_of_instance] += len(word_indices)
+                        loss_accum_loss[task_of_instance] += loss.value()
+
                         loss.backward()
-                        trainer.update()
+                        self.trainer.update()
                         dynet.renew_cg()  # use new computational graph for each BATCH when batching is active
                         batch = []
                 else:
@@ -371,15 +388,26 @@ class NNTagger(object):
                     lv = loss1.value()
                     total_loss += lv
 
+                    # logging
+                    loss_accum_tagged[task_of_instance] += len(word_indices)
+                    loss_accum_loss[task_of_instance] += loss1.value()
+
                     loss1.backward()
-                    trainer.update()
+                    self.trainer.update()
 
 
             print("iter {2} {0:>12}: {1:.2f}".format("total loss",
                                                      total_loss/total_tagged,
                                                      iter), file=sys.stderr,
                   flush=True)
-            
+
+            # log losses
+            for task_id in sorted(losses):
+                losses[task_id].append(loss_accum_loss[task_id] / loss_accum_tagged[task_id])
+
+            if log_losses:
+                pickle.dump(losses, open(model_path + ".model" + ".losses.pickle", "wb"))
+
             if dev:
                 # evaluate after every epoch
                 correct, total = self.evaluate(dev_X, dev_Y, org_X, org_Y, dev_task_labels)
