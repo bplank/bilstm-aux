@@ -61,7 +61,15 @@ https://github.com/clab/dynet/pull/130#issuecomment-259656695
 Training the tagger:
 
 ```
-python src/bilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --dev data/da-ud-test.conllu --iters 10 --pred_layer 1
+python src/bilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --dev data/da-ud-dev.conllu --test data/da-ud-test.conllu --iters 10 --pred_layer 1 --save model
+```
+
+Training and saving in two steps (`--save` for storing and `--model` for loading):
+
+```
+python src/bilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --iters 10 --pred_layer 1 --save model
+
+python src/bilty.py --pred_layer 1 --model model --test data/da-ud-test.conllu --output predictions/test-da.out
 ```
 
 #### Embeddings
