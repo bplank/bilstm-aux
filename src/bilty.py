@@ -40,7 +40,8 @@ def main():
     parser.add_argument("--raw", help="if test file is in raw format (one sentence per line)", required=False, action="store_true", default=False)
     parser.add_argument("--dev", help="dev file(s)", required=False) 
     parser.add_argument("--output", help="output predictions to file", required=False,default=None)
-    parser.add_argument("--save", help="save model to file (appends .model as well as .pickle)", required=True,default=None)
+    parser.add_argument("--output-probs", help="output prediction probs to file (last column)", required=False, default=None)
+    parser.add_argument("--save", help="save model to file (appends .model as well as .pickle)",default=None)
     parser.add_argument("--embeds", help="word embeddings file", required=False, default=None)
     parser.add_argument("--sigma", help="noise sigma", required=False, default=0.2, type=float)
     parser.add_argument("--ac", help="activation function [rectify, tanh, ...]", default="tanh", choices=ACTIVATION_MAP.keys())
@@ -70,7 +71,17 @@ def main():
     args = parser.parse_args()
 
     if args.output is not None:
-        assert os.path.exists(os.path.dirname(args.output))
+        if os.path.isdir(args.output):
+            if not os.path.exists(args.output):
+                os.mkdir(os.path.dirname(args.output))
+
+    if args.save:
+        model_dirname = os.path.dirname(args.save)
+        if os.path.isdir(model_dirname) and not os.path.exists(model_dirname):
+            os.mkdir(model_dirname)
+
+    if args.dev:
+        assert (args.save is not None), "Require to save model to --save MODELNAME when --dev is given"
 
     if args.train:
         if not args.pred_layer:
@@ -110,7 +121,7 @@ def main():
 
     if args.model:
         print("loading model from file {}".format(args.model), file=sys.stderr)
-        tagger = load(args)
+        tagger = load(args.model)
     else:
         tagger = NNTagger(args.in_dim,
                           args.h_dim,
@@ -137,10 +148,12 @@ def main():
 
         if args.save and not args.patience:  # in case patience is active it gets saved in the fit function
             save(tagger, args.save)
+            tagger = load(args.save)
 
         if args.patience:
             # reload patience 2 model
             tagger = load(args.save)
+
 
     if args.test and len( args.test ) != 0:
         if not args.model:
@@ -160,7 +173,7 @@ def main():
             sys.stderr.write('*******\n')
             test_X, test_Y, org_X, org_Y, task_labels = tagger.get_data_as_indices(test, "task"+str(i), raw=args.raw)
             correct, total = tagger.evaluate(test_X, test_Y, org_X, org_Y, task_labels,
-                                             output_predictions=args.output, raw=args.raw)
+                                             output_predictions=args.output, output_probs=args.output_probs, raw=args.raw)
 
             if not args.raw:
                 print("\nTask%s test accuracy on %s items: %.4f" % (i, i+1, correct/total), file=sys.stderr)
@@ -398,8 +411,7 @@ class NNTagger(object):
 
             print("iter {2} {0:>12}: {1:.2f}".format("total loss",
                                                      total_loss/total_tagged,
-                                                     iter), file=sys.stderr,
-                  flush=True)
+                                                     iter), file=sys.stderr, flush=True)
 
             # log losses
             for task_id in sorted(losses):
@@ -415,22 +427,22 @@ class NNTagger(object):
                 print("\ndev accuracy: %.4f" % (val_accuracy),
                       file=sys.stderr, flush=True)
 
-                if val_accuracy > best_val_acc:
-                    print('Accuracy %.4f is better than best val accuracy '
-                          '%.4f.' % (val_accuracy, best_val_acc),
-                          file=sys.stderr, flush=True)
-                    best_val_acc = val_accuracy
-                    epochs_no_improvement = 0
-                    save(self, model_path)
-                else:
-                    print('Accuracy %.4f is worse than best val loss %.4f.' %
-                          (val_accuracy, best_val_acc), file=sys.stderr,
-                          flush=True)
-                    epochs_no_improvement += 1
-                if epochs_no_improvement == patience:
-                    print('No improvement for %d epochs. Early stopping...' %
-                          epochs_no_improvement, file=sys.stderr, flush=True)
-                    break
+                if patience:
+                    if val_accuracy > best_val_acc:
+                        print('Accuracy %.4f is better than best val accuracy '
+                              '%.4f.' % (val_accuracy, best_val_acc),
+                              file=sys.stderr, flush=True)
+                        best_val_acc = val_accuracy
+                        epochs_no_improvement = 0
+                        save(self, model_path)
+                    else:
+                        print('Accuracy %.4f is worse than best val loss %.4f.' %
+                              (val_accuracy, best_val_acc), file=sys.stderr, flush=True)
+                        epochs_no_improvement += 1
+                    if epochs_no_improvement == patience:
+                        print('No improvement for %d epochs. Early stopping...' %
+                              epochs_no_improvement, file=sys.stderr, flush=True)
+                        break
 
 
     def build_computation_graph(self, num_words, num_chars):
@@ -617,7 +629,7 @@ class NNTagger(object):
         raise Exception("oops should not be here")
         return None
 
-    def evaluate(self, test_X, test_Y, org_X, org_Y, task_labels, output_predictions=None, verbose=True, raw=False):
+    def evaluate(self, test_X, test_Y, org_X, org_Y, task_labels, output_predictions=None, output_probs=False, verbose=True, raw=False):
         """
         compute accuracy on a test file
         """
@@ -649,7 +661,10 @@ class NNTagger(object):
                     if raw:
                         print(u"{}\t{}".format(w, p)) # do not print DUMMY tag when --raw is on
                     else:
-                        print(u"%s\t%s\t%s\t%.2f" % (w, g, p, c))
+                        if output_probs:
+                            print(u"%s\t%s\t%s\t%.2f" % (w, g, p, c))
+                        else:
+                            print(u"%s\t%s\t%s" % (w, g, p))
                 print("")
 
             correct += sum([1 for (predicted, gold) in zip(predicted_tag_indices, gold_tag_indices) if predicted == gold])
