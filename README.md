@@ -2,6 +2,8 @@
 
 Bidirectional Long-Short Term Memory tagger 
 
+**Coming up soon**: Updated tagger code for our EMNLP 2018 paper - stay tuned!
+
 If you use this tagger please cite our paper:
 http://arxiv.org/abs/1604.05529
 
