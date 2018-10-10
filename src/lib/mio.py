@@ -1,24 +1,76 @@
 import codecs
 import numpy as np
-import sys
+from scipy import linalg
+from collections import defaultdict
+import re
 
-def load_embeddings_file(file_name, sep=" ",lower=False):
+class Seq(object):
+    """
+    Seq (sequential data) object
+    """
+    __slots__ = ['words', 'tags', 'task_id', 'pred_tags', 'tag_confidences']
+
+    def __init__(self, words, tags=None, task_id=None):
+        self.words = words
+        self.tags = tags
+        self.task_id = task_id
+        self.tag_confidences = []
+        self.pred_tags = []
+
+    def evaluate(self):
+        correct = np.sum([i == j for i, j in zip(self.pred_tags, self.tags)])
+        total = len(self.tags)
+        return correct, total
+
+class SeqData(object):
+    """
+    Reads in all data files and maps them to task ids
+    """
+    __slots__ = ['seqs', 'task_ids']
+
+    def __init__(self, list_folders_name):
+        self.seqs = []
+        self.task_ids = set()
+        for i, file_name in enumerate(list_folders_name):
+            task_id = "task{}".format(i)
+            self.task_ids.add(task_id)
+            for word_seq, tag_seq in read_conll_file(file_name):
+                self.seqs.append(Seq(word_seq, tag_seq, task_id))
+
+    def __iter__(self):
+        """iterate over data"""
+        for seq in self.seqs:
+            yield seq
+
+def load_dict(file_name):
+    d = defaultdict(set)
+    dict_values = set()
+    for line in codecs.open(file_name,encoding="utf-8", errors="ignore"):
+        word, tag = line.strip().split("\t")
+        d[word].add(tag)
+        dict_values.add(tag)
+    print("Loaded dictionary with {} word types".format(len(d)))
+    return d, sorted(dict_values)
+
+def load_embeddings_file(file_name, sep=" ",lower=False, normalize=False):
     """
     load embeddings file
     """
     emb={}
     for line in open(file_name, errors='ignore', encoding='utf-8'):
         try:
-            fields = line.strip().split(sep)
+            fields = re.split(" ", line) 
             vec = [float(x) for x in fields[1:]]
             word = fields[0]
             if lower:
                 word = word.lower()
             emb[word] = vec
+            if normalize:
+                emb[word] /= linalg.norm(emb[w])
         except ValueError:
             print("Error converting: {}".format(line))
 
-    print("loaded pre-trained embeddings (word->emb_vec) size: {} (lower: {})".format(len(emb.keys()), lower))
+    print("loaded pre-trained embeddings (word->emb_vec) size: {}".format(len(emb)))
     return emb, len(emb[word])
 
 def read_conll_file(file_name, raw=False):
@@ -53,13 +105,13 @@ def read_conll_file(file_name, raw=False):
                     if len(line.split("\t")) == 1: # emtpy words in gimpel
                         raise IOError("Issue with input file - doesn't have a tag or token?")
                     else:
-                        print("erroneous line: {} (line number: {}) ".format(line), file=sys.stderr)
-                        exit()
+                        raise IOError("erroneous line: {}".format(line))
                 else:
                     word, tag = line.split('\t')
+                    if not tag:
+                        raise IOError("empty tag in line line: {}".format(line))
                 current_words.append(word)
                 current_tags.append(tag)
-
         else:
             if current_words and not raw: #skip emtpy lines
                 yield (current_words, current_tags)
@@ -70,7 +122,6 @@ def read_conll_file(file_name, raw=False):
     if current_tags != [] and not raw:
         yield (current_words, current_tags)
 
-    
 if __name__=="__main__":
     allsents=[]
     unique_tokens=set()
