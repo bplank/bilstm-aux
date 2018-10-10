@@ -1,4 +1,4 @@
-import dynet
+import _dynet as dynet
 """
 various helper mappings
 """
