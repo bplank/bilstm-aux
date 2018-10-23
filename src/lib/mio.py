@@ -59,7 +59,9 @@ def load_embeddings_file(file_name, sep=" ",lower=False, normalize=False):
     emb={}
     for line in open(file_name, errors='ignore', encoding='utf-8'):
         try:
-            fields = re.split(" ", line) 
+            fields = re.split(" ", line)
+            if fields[-1] == "\n":
+                fields = fields[:-1] 
             vec = [float(x) for x in fields[1:]]
             word = fields[0]
             if lower:
