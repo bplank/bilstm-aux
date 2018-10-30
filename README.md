@@ -92,7 +92,7 @@ downloaded from [here](http://www.let.rug.nl/bplank/bilty/embeds.tar.gz) (0.6GB)
 You can see the options by running:
 
 ```
-python src/bilty.py --help
+python src/structbilty.py --help
 ```
 
 A great option is DyNet autobatching ([Neubig et al.,
@@ -100,16 +100,19 @@ A great option is DyNet autobatching ([Neubig et al.,
 ~20\%).  You can activate it with:
 
 ``
-python src/bilty.sh --dynet-autobatch 1
+python src/structbilty.sh --dynet-autobatch 1
 ``
 
 #### Major changes:
 
-- major refactoring in internal data handling
+- major refactoring of internal data handling
+- renaming to `structbilty`
 - `--pred-layer` is no longer required
 - a single `--model` options handles both saving and loading model parameters
 - the option of running a CRF has been added
 - the tagger can handle additional lexical features (see our DsDs paper, EMNLP 2018) below 
+- grouping of arguments
+- `simplebilty` is deprecated (still available in the [former release](https://github.com/bplank/bilstm-aux/releases/tag/v1.0)
 
 #### Todo
 
