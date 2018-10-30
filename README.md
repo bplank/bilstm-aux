@@ -111,6 +111,10 @@ python src/bilty.sh --dynet-autobatch 1
 - the option of running a CRF has been added
 - the tagger can handle additional lexical features (see our DsDs paper, EMNLP 2018) below 
 
+#### Todo
+
+- move to DyNet 2.1
+
 #### References
 
 ```
