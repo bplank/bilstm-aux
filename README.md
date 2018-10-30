@@ -6,8 +6,8 @@ This is a new version (`structbilty`) of an earlier bi-LSTM tagger (Plank et al.
 
 If you use this tagger please cite our papers:
 
-https://aclanthology.coli.uni-saarland.de/papers/D18-1061/d18-1061
-http://arxiv.org/abs/1604.05529
+* https://aclanthology.coli.uni-saarland.de/papers/D18-1061/d18-1061
+* http://arxiv.org/abs/1604.05529
 
 ### Requirements
 
