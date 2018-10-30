@@ -59,7 +59,17 @@ test if the installation worked with:
 Training the tagger:
 
 ```
-python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --dev data/da-ud-dev.conllu --test data/da-ud-test.conllu --iters 10 --model da
+python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --test data/da-ud-test.conllu --iters 10 --model da
+```
+
+Training with patience:
+```
+python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --dev data/da-ud-dev.conllu --test data/da-ud-test.conllu --iters 10 --model da --patience 2
+```
+
+Testing:
+```
+python src/structbilty.py --model da --test data/da-ud-test.conllu --output predictions/test-da.out
 ```
 
 Training and testing in two steps (`--model` for both saving and loading):
