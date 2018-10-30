@@ -64,7 +64,7 @@ python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --tes
 
 Training with patience:
 ```
-python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --dev data/da-ud-dev.conllu --test data/da-ud-test.conllu --iters 10 --model da --patience 2
+python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --dev data/da-ud-dev.conllu --test data/da-ud-test.conllu --iters 50 --model da --patience 2
 ```
 
 Testing:
