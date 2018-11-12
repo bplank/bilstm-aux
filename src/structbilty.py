@@ -60,6 +60,9 @@ def main():
     group_output.add_argument("--output", help="output predictions to file [word|gold|pred]", default=None)
     group_output.add_argument("--output-confidences", help="output tag confidences", action="store_true", default=False)
     group_output.add_argument("--save-embeds", help="save word embeddings to file", required=False, default=None)
+    group_output.add_argument("--save-lexembeds", help="save lexicon embeddings to file", required=False, default=None)
+    group_output.add_argument("--save-cwembeds", help="save character-based word-embeddings to file", required=False, default=None)
+    group_output.add_argument("--save-lwembeds", help="save lexicon-based word-embeddings to file", required=False, default=None)
     group_output.add_argument("--mimickx-model", help="use mimickx model for OOVs", required=False, default=None, type=str)
 
 
@@ -193,7 +196,7 @@ def main():
 
     if args.test and len( args.test ) != 0:
 
-        tagger = load(args.model)
+        tagger = load(args.model, args.dictionary)
 
         # check if mimickx provided after training
         if args.mimickx_model:
@@ -233,16 +236,27 @@ def main():
                                                              "patience","sigma","disable_backprob_embed",
                                                              "trainer", "dynet_seed", "dynet_mem","iters"]]))
 
+    tagger = load(args.model, args.dictionary)
+
     if args.save_embeds:
         tagger.save_embeds(args.save_embeds)
 
+    if args.save_lexembeds:
+        tagger.save_lex_embeds(args.save_lexembeds)
+
+    if args.save_cwembeds:
+        tagger.save_cw_embeds(args.save_cwembeds)
+
+    if args.save_lwembeds:
+        tagger.save_lw_embeds(args.save_lwembeds)
+    
     if args.transition_matrix:
         tagger.save_transition_matrix(args.transition_matrix)
 
 
 
 
-def load(model_path):
+def load(model_path, local_dictionary=None):
     """
     load a model from file; specify the .model file, it assumes the *pickle file in the same location
     """
@@ -250,6 +264,8 @@ def load(model_path):
     myparams = dill.load(open(model_path+".params.pickle", "rb"))
     if not "mimickx_model_path" in myparams:
         myparams["mimickx_model_path"] = None
+    if local_dictionary:
+        myparams["path_to_dictionary"] = local_dictionary
     tagger = NNTagger(myparams["in_dim"],
                       myparams["h_dim"],
                       myparams["c_in_dim"],
@@ -417,10 +433,11 @@ class NNTagger(object):
         print("build graph")
         self.build_computation_graph(len(self.w2i),  len(self.c2i))
 
+        update_embeds = True
         if self.backprob_embeds == False: ## disable backprob into embeds
-            self.wembeds.set_updated(False)
-            print(">>> disable wembeds update <<< (is updated: {})".format(self.wembeds.is_updated()))
-
+            print(">>> disable wembeds update <<<")
+            update_embeds = False
+            
         best_val_acc, epochs_no_improvement = 0.0, 0
 
         if dev and model_path is not None and patience > 0:
@@ -447,7 +464,7 @@ class NNTagger(object):
 
                 if minibatch_size > 1:
                     # accumulate instances for minibatch update
-                    loss1 = self.predict(seq, train=True)
+                    loss1 = self.predict(seq, train=True, update_embeds=update_embeds)
                     total_tagged += len(seq.words)
                     batch.append(loss1)
                     if len(batch) == minibatch_size:
@@ -464,7 +481,7 @@ class NNTagger(object):
                         batch = []
                 else:
                     dynet.renew_cg() # new graph per item
-                    loss1 = self.predict(seq, train=True)
+                    loss1 = self.predict(seq, train=True, update_embeds=update_embeds)
                     total_tagged += len(seq.words)
                     lv = loss1.value()
                     total_loss += lv
@@ -608,29 +625,21 @@ class NNTagger(object):
         self.predictors["output_layers_dict"] = output_layers_dict
         self.predictors["task_expected_at"] = task2layer
 
-
-    def normalize(self, weight, emb_vec):
-        emb_vec = emb_vec.npvalue()
-        mean = np.sum(emb_vec * weight)
-        var = np.sum(weight * np.power(emb_vec - mean, 2))
-        stdev = np.sqrt(1e-6 + var)
-        return (emb_vec - mean) / stdev
-
-    
-    def get_features(self, words, train=False, normalize=False):
+        
+    def get_features(self, words, train=False, update=True):
         """
         get feature representations
         """
         # word embeddings
-        wfeatures = np.array([self.get_w_repr(word, train=train, normalize=normalize) for word in words])
-        wfeatures = dynet.inputTensor(wfeatures)
+        wfeatures = np.array([self.get_w_repr(word, train=train, update=update) for word in words])
+
         lex_features = []
         if self.dictionary and not self.type_constraint:
             ## add lexicon features
             lex_features = np.array([self.get_lex_repr(word) for word in words])
         # char embeddings
         if self.c_in_dim > 0:
-            cfeatures = [self.get_c_repr(word, train=train, normalize=normalize) for word in words]
+            cfeatures = [self.get_c_repr(word, train=train) for word in words]
             if len(lex_features) > 0:
                 lex_features = dynet.inputTensor(lex_features)
                 features = [dynet.concatenate([w,c,l]) for w,c,l in zip(wfeatures,cfeatures,lex_features)]
@@ -642,13 +651,13 @@ class NNTagger(object):
             features = [dynet.noise(fe,self.noise_sigma) for fe in features]
         return features
 
-    def predict(self, seq, train=False, output_confidences=False, unk_tag=None):
+    def predict(self, seq, train=False, output_confidences=False, unk_tag=None, update_embeds=True):
         """
         predict tags for a sentence represented as char+word embeddings and compute losses for this instance
         """
         if not train:
             dynet.renew_cg()
-        features = self.get_features(seq.words, train=train)
+        features = self.get_features(seq.words, train=train, update=update_embeds)
 
         output_expected_at_layer = self.predictors["task_expected_at"][seq.task_id]
         output_expected_at_layer -=1
@@ -725,7 +734,7 @@ class NNTagger(object):
             total+= total_inst
         return correct, total
 
-    def get_w_repr(self, word, train=False, normalize=False):
+    def get_w_repr(self, word, train=False, update=True):
         """
         Get representation of word (word embedding)
         """
@@ -738,13 +747,12 @@ class NNTagger(object):
                     #print("predict with MIMICKX for: ", word)
                     return dynet.inputVector(self.mimickx_model.predict(word).npvalue())
             w_id = self.w2i.get(word, self.w2i[UNK])
-        if not normalize:
-            return self.wembeds[w_id].npvalue()
+        if not update:
+            return dynet.nobackprop(self.wembeds[w_id])
         else:
-            weight = self.wcount.get(word, 1) / self.wtotal
-            return self.normalize(weight, self.wembeds[w_id])
+            return self.wembeds[w_id] 
 
-    def get_c_repr(self, word, train=False, normalize=False):
+    def get_c_repr(self, word, train=False):
         """
         Get representation of word via characters sub-LSTMs
         """
@@ -755,13 +763,8 @@ class NNTagger(object):
                 chars_of_token = [drop(c, self.ccount, self.c_dropout_rate) for c in chars_of_token]
         else:
             chars_of_token = array.array('I',[self.c2i[WORD_START]]) + array.array('I',[self.get_c_idx(c, train=train) for c in word]) + array.array('I',[self.c2i[WORD_END]])
-        if not normalize:
-            char_feats = [self.cembeds[c_id] for c_id in chars_of_token]
-        else:
-            char_feats = []
-            for char in word:
-                weight = self.ccount.get(char, 1) / self.ctotal
-                char_feats.append(dynet.inputVector(self.normalize(weight, self.cembeds[self.c2i.get(char, self.c2i[UNK])])))
+
+        char_feats = [self.cembeds[c_id] for c_id in chars_of_token]
         # use last state as word representation
         f_char, b_char = self.char_rnn.predict_sequence(char_feats, char_feats)
         return dynet.concatenate([f_char[-1], b_char[-1]])
@@ -859,6 +862,65 @@ class NNTagger(object):
             OUT.write("{} {}\n".format(word," ".join([str(x) for x in wembeds_expression.npvalue()])))
         OUT.close()
 
+
+    def save_lex_embeds(self, out_filename):
+        """
+        save final embeddings to file
+        :param out_filename: filename
+        """
+        # construct reverse mapping
+        i2l = {self.l2i[w]: w for w in self.l2i.keys()}
+
+        OUT = open(out_filename+".l.emb","w")
+        for lex_id in i2l.keys():
+            lembeds_expression = self.lembeds[lex_id]
+            lex = i2l[lex_id]
+            OUT.write("{} {}\n".format(lex," ".join([str(x) for x in lembeds_expression.npvalue()])))
+        OUT.close()
+
+
+    def save_cw_embeds(self, out_filename):
+        """
+        save final character-based word-embeddings to file
+        :param out_filename: filename
+        """
+        # construct reverse mapping using word embeddings
+        i2cw = {self.w2i[w]: w for w in self.w2i.keys()}
+
+        OUT = open(out_filename+".cw.emb","w")
+        for word_id in i2cw.keys():
+            word = i2cw[word_id]
+            cwembeds = [v.npvalue()[0] for v in self.get_c_repr(word)]
+            OUT.write("{} {}\n".format(word," ".join([str(x) for x in cwembeds])))
+        OUT.close()
+
+
+    def save_wordlex_map(self, out_filename):
+        """
+        save final word-to-lexicon-embedding map to file
+        :param out_filename: filename
+        """
+        # construct reverse mapping using word embeddings
+        i2wl = {self.w2i[w]: w for w in self.w2i.keys()}
+
+        OUT = open(out_filename+".wlmap.emb","w")
+        for word_id in i2wl.keys():
+            word = i2wl[word_id]
+
+            lex_feats = []
+            for property in self.dictionary_values:
+                values = is_in_dict(word, self.dictionary)
+                if values:
+                    if property in values:
+                        lex_feats.append(property)
+                    else:
+                        lex_feats.append(UNK)
+                else:
+                    lex_feats.append(UNK) # unknown word
+
+            OUT.write("{} {}\n".format(word," ".join([str(x) for x in lex_feats])))
+        OUT.close()
+        
     def save_transition_matrix(self, out_filename):
         """
         save transition matrix
