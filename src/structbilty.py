@@ -710,7 +710,7 @@ class NNTagger(object):
                     print(u"{}\t{}".format(w, p))  # do not print DUMMY tag when --raw is on
             else:
                 if output_confidences:
-                    print(u"{0}\t{1}\t{}\t{2:.2f}".format(w, g, p, seq.tag_confidences[i]))
+                    print(u"{0}\t{1}\t{2}\t{3:.2f}".format(w, g, p, seq.tag_confidences[i]))
                 else:
                     print(u"{}\t{}\t{}".format(w, g, p))
             i += 1
