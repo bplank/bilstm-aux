@@ -210,7 +210,7 @@ def main():
 
             for i, test_file in enumerate(args.test): # expect them in same order
                 if args.output is not None:
-                    sys.stdout = codecs.open(args.output, 'w', encoding='utf-8')
+                    sys.stdout = codecs.open(args.output + ".task{}".format(i), 'w', encoding='utf-8')
 
                 start_testing = time.time()
 
