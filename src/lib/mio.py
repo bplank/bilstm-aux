@@ -57,9 +57,13 @@ def load_embeddings_file(file_name, sep=" ",lower=False, normalize=False):
     load embeddings file
     """
     emb={}
+    first = True
     for line in open(file_name, errors='ignore', encoding='utf-8'):
         try:
             fields = re.split(" ", line)
+            if len(fields) < 5 and first:
+                first = False
+                continue
             if fields[-1] == "\n":
                 fields = fields[:-1] 
             vec = [float(x) for x in fields[1:]]
@@ -69,6 +73,7 @@ def load_embeddings_file(file_name, sep=" ",lower=False, normalize=False):
             emb[word] = vec
             if normalize:
                 emb[word] /= linalg.norm(emb[w])
+            first = False
         except ValueError:
             print("Error converting: {}".format(line))
 
