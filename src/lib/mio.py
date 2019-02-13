@@ -96,6 +96,7 @@ def read_conll_file(file_name, raw=False):
     """
     current_words = []
     current_tags = []
+    ws_pattern = re.compile("^\s+$") # match emtpy lines that contain some whitespace
     
     for line in codecs.open(file_name, encoding='utf-8'):
         #line = line.strip()
@@ -103,7 +104,7 @@ def read_conll_file(file_name, raw=False):
 
         if line:
             if raw:
-                current_words = line.split() ## simple splitting by space
+                current_words = line.split() ## simple splitting by whitespace
                 current_tags = ['DUMMY' for _ in current_words]
                 yield (current_words, current_tags)
 
@@ -113,6 +114,13 @@ def read_conll_file(file_name, raw=False):
                         raise IOError("Issue with input file - doesn't have a tag or token?")
                     else:
                         raise IOError("erroneous line: {}".format(line))
+                
+                elif ws_pattern.match(line): # lines that only consist of a tab
+                    # treat them as empty lines
+                    if current_words: 
+                        yield (current_words, current_tags)
+                        current_words = []
+                        current_tags = []
                 else:
                     word, tag = line.split('\t')
                     if not tag:
