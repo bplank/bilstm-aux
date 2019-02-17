@@ -3,6 +3,7 @@ import numpy as np
 from scipy import linalg
 from collections import defaultdict
 import re
+import sys
 
 class Seq(object):
     """
@@ -102,36 +103,29 @@ def read_conll_file(file_name, raw=False):
         #line = line.strip()
         line = line[:-1]
 
-        if line:
+        if not line or ws_pattern.match(line):
+            if current_words and not raw: #skip emtpy lines
+                yield (current_words, current_tags)
+            current_words = []
+            current_tags = []
+
+        else:
             if raw:
                 current_words = line.split() ## simple splitting by whitespace
                 current_tags = ['DUMMY' for _ in current_words]
                 yield (current_words, current_tags)
-
             else:
                 if len(line.split("\t")) != 2:
                     if len(line.split("\t")) == 1: # emtpy words in gimpel
                         raise IOError("Issue with input file - doesn't have a tag or token?")
                     else:
                         raise IOError("erroneous line: {}".format(line))
-                
-                elif ws_pattern.match(line): # lines that only consist of a tab
-                    # treat them as empty lines
-                    if current_words: 
-                        yield (current_words, current_tags)
-                        current_words = []
-                        current_tags = []
                 else:
                     word, tag = line.split('\t')
                     if not tag:
                         raise IOError("empty tag in line line: {}".format(line))
-                current_words.append(word)
-                current_tags.append(tag)
-        else:
-            if current_words and not raw: #skip emtpy lines
-                yield (current_words, current_tags)
-            current_words = []
-            current_tags = []
+            current_words.append(word)
+            current_tags.append(tag)
 
     # check for last one
     if current_tags != [] and not raw:
@@ -141,10 +135,12 @@ if __name__=="__main__":
     allsents=[]
     unique_tokens=set()
     unique_tokens_lower=set()
-    for words, tags in read_conll_file("data/da-ud-train.conllu"):
+    for words, tags in read_conll_file(sys.argv[1]):
         allsents.append(words)
         unique_tokens.update(words)
         unique_tokens_lower.update([w.lower() for w in words])
-    assert(len(allsents)==4868)
-    assert(len(unique_tokens)==17552)
+    print(allsents[1])
+    print(allsents[-1])
+    assert(len(allsents)==412)
+#    assert(len(unique_tokens)==17552)
 
