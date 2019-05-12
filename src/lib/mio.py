@@ -29,13 +29,13 @@ class SeqData(object):
     """
     __slots__ = ['seqs', 'task_ids']
 
-    def __init__(self, list_folders_name):
+    def __init__(self, list_folders_name, raw=False):
         self.seqs = []
         self.task_ids = set()
         for i, file_name in enumerate(list_folders_name):
             task_id = "task{}".format(i)
             self.task_ids.add(task_id)
-            for word_seq, tag_seq in read_conll_file(file_name):
+            for word_seq, tag_seq in read_conll_file(file_name, raw):
                 self.seqs.append(Seq(word_seq, tag_seq, task_id))
 
     def __iter__(self):
@@ -124,8 +124,8 @@ def read_conll_file(file_name, raw=False):
                     word, tag = line.split('\t')
                     if not tag:
                         raise IOError("empty tag in line line: {}".format(line))
-            current_words.append(word)
-            current_tags.append(tag)
+                current_words.append(word)
+                current_tags.append(tag)
 
     # check for last one
     if current_tags != [] and not raw:

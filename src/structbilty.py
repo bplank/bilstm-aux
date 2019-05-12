@@ -207,7 +207,7 @@ def main():
         stdout = sys.stdout
         # One file per test ...
         if args.test:
-            test = SeqData(args.test) # read in all test data
+            test = SeqData(args.test, raw=args.raw) # read in all test data
 
             for i, test_file in enumerate(args.test): # expect them in same order
                 if args.output is not None:
