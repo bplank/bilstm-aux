@@ -73,6 +73,7 @@ def main():
     group_opt.add_argument("--learning-rate", help="learning rate [0: use default]", default=0, type=float) # see: http://dynet.readthedocs.io/en/latest/optimizers.html
     group_opt.add_argument("--patience", help="patience [default: 0=not used], requires specification of --dev and model path --save", required=False, default=0, type=int)
     group_opt.add_argument("--log-losses", help="log loss (for each task if multiple active)", required=False, action="store_true", default=False)
+    group_opt.add_argument("--clip-threshold", help="gradient clip threshold (by default off)", required=False, default=0, type=float)
     group_opt.add_argument("--word-dropout-rate", help="word dropout rate [default: 0.25], if 0=disabled, recommended: 0.25 (Kiperwasser & Goldberg, 2016)", required=False, default=0.25, type=float)
     group_opt.add_argument("--char-dropout-rate", help="char dropout rate [default: 0=disabled]", required=False, default=0.0, type=float)
     group_opt.add_argument("--disable-backprob-embeds", help="disable backprob into embeddings (default is to update)",
@@ -189,7 +190,7 @@ def main():
 
         tagger.fit(train, args.iters,
                    dev=dev,
-                   model_path=model_path, patience=args.patience, minibatch_size=args.minibatch_size, log_losses=args.log_losses)
+                   model_path=model_path, patience=args.patience, minibatch_size=args.minibatch_size, log_losses=args.log_losses, clip_threshold=args.clip_threshold)
 
         if not args.dev and not args.patience:  # in case patience is active it gets saved in the fit function
             save(tagger, model_path)
@@ -420,7 +421,7 @@ class NNTagger(object):
             self.path_to_dictionary = None
             self.lex_dim = 0
 
-    def fit(self, train, num_iterations, dev=None, model_path=None, patience=0, minibatch_size=0, log_losses=False):
+    def fit(self, train, num_iterations, dev=None, model_path=None, patience=0, minibatch_size=0, log_losses=False, clip_threshold=0):
         """
         train the tagger
         """
@@ -428,6 +429,9 @@ class NNTagger(object):
 
         print("init parameters")
         self.init_parameters(train)
+        if clip_threshold > 0:
+            print("set clip threshold")
+            self.trainer.set_clip_threshold(clip_threshold)
 
         # init lookup parameters and define graph
         print("build graph")
