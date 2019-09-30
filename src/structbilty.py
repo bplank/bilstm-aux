@@ -37,6 +37,7 @@ def main():
     group_model.add_argument("--h_layers", help="number of stacked LSTMs [default: 1 = no stacking]", required=False, type=int, default=1)
     group_model.add_argument("--pred_layer", nargs='*', help="predict task at this layer [default: last layer]", required=False) # for each task the layer on which it is predicted (default 1)
     group_model.add_argument("--embeds", help="word embeddings file", required=False, default=None)
+    group_model.add_argument("--embeds_in_file", help="you can save the embeddings in the file using a format like emb=0.1,-0.4", required=False, action="store_true", default=False)
     group_model.add_argument("--crf", help="use CRF instead of local decoding", default=False, action="store_true")
     group_model.add_argument("--viterbi-loss", help="Use viterbi loss training (only active if --crf is on)", action="store_true", default=False)
     group_model.add_argument("--transition-matrix", help="store transition matrix from CRF")
@@ -167,6 +168,7 @@ def main():
                           args.h_layers,
                           args.pred_layer,
                           embeds_file=args.embeds,
+                          embeds_in_file=args.embeds_in_file,
                           w_dropout_rate=args.word_dropout_rate,
                           c_dropout_rate=args.char_dropout_rate,
                           activation=ACTIVATION_MAP[args.ac],
@@ -184,13 +186,13 @@ def main():
                           lex_dim=args.lex_dim, embed_lex=args.embed_lex)
 
         dev = None
-        train = SeqData(args.train)
+        train = SeqData(args.train, embeds_in_file=args.embeds_in_file)
         if args.dev:
-            dev = SeqData(args.dev)
+            dev = SeqData(args.dev, embeds_in_file=args.embeds_in_file)
 
         tagger.fit(train, args.iters,
                    dev=dev,
-                   model_path=model_path, patience=args.patience, minibatch_size=args.minibatch_size, log_losses=args.log_losses, clip_threshold=args.clip_threshold)
+                   model_path=model_path, patience=args.patience, minibatch_size=args.minibatch_size, log_losses=args.log_losses, clip_threshold=args.clip_threshold, embeds_in_file=args.embeds_in_file)
 
         if not args.dev and not args.patience:  # in case patience is active it gets saved in the fit function
             save(tagger, model_path)
@@ -207,7 +209,7 @@ def main():
         stdout = sys.stdout
         # One file per test ...
         if args.test:
-            test = SeqData(args.test, raw=args.raw) # read in all test data
+            test = SeqData(args.test, raw=args.raw, embeds_in_file=args.embeds_in_file) # read in all test data
 
             for i, test_file in enumerate(args.test): # expect them in same order
                 if args.output is not None:
@@ -220,7 +222,7 @@ def main():
                 correct, total = tagger.evaluate(test, "task{}".format(i),
                                                  output_predictions=args.output,
                                                  output_confidences=args.output_confidences, raw=args.raw,
-                                                 unk_tag=None)
+                                                 unk_tag=None, embeds_in_file=args.embeds_in_file)
                 if not args.raw:
                     print("\nTask{} test accuracy on {} items: {:.4f}".format(i, i+1, correct/total),file=sys.stderr)
                 print(("Done. Took {0:.2f} seconds in total (testing took {1:.2f} seconds).".format(time.time()-start,
@@ -345,15 +347,16 @@ class NNTagger(object):
     __slots__ = ['w2i', 'c2i', 'wcount', 'ccount','wtotal','ctotal','w2c_cache','w_dropout_rate','c_dropout_rate',
                   'task2tag2idx', 'model', 'in_dim', 'c_in_dim', 'c_h_dim','h_dim', 'activation',
                  'noise_sigma', 'pred_layer', 'mlp', 'activation_mlp', 'backprob_embeds', 'initializer',
-                 'h_layers', 'predictors', 'wembeds', 'cembeds', 'embeds_file', 'char_rnn', 'trainer',
-                 'builder', 'crf', 'viterbi_loss', 'mimickx_model_path', 'mimickx_model',
+                 'h_layers', 'predictors', 'wembeds', 'cembeds', 'embeds_file', 'embeds_in_file', 'char_rnn', 
+                 'trainer', 'builder', 'crf', 'viterbi_loss', 'mimickx_model_path', 'mimickx_model',
                  'dictionary',  'dictionary_values', 'path_to_dictionary', 'lex_dim', 'type_constraint',
                  'embed_lex', 'l2i', 'lembeds']
 
     def __init__(self,in_dim,h_dim,c_in_dim,c_h_dim,h_layers,pred_layer,learning_algo="sgd", learning_rate=0,
-                 embeds_file=None,activation=ACTIVATION_MAP["tanh"],mlp=0,activation_mlp=ACTIVATION_MAP["rectify"],
-                 backprob_embeds=True,noise_sigma=0.1, w_dropout_rate=0.25, c_dropout_rate=0.25,
-                 initializer=INITIALIZER_MAP["glorot"], builder=BUILDERS["lstmc"], crf=False, viterbi_loss=False,
+                 embeds_file=None,embeds_in_file=False,activation=ACTIVATION_MAP["tanh"],mlp=0,
+                 activation_mlp=ACTIVATION_MAP["rectify"],backprob_embeds=True,noise_sigma=0.1,
+                 w_dropout_rate=0.25, c_dropout_rate=0.25,initializer=INITIALIZER_MAP["glorot"], 
+                 builder=BUILDERS["lstmc"], crf=False, viterbi_loss=False,
                  mimickx_model_path=None, dictionary=None, type_constraint=False,
                  lex_dim=0, embed_lex=False):
         self.w2i = {}  # word to index mapping
@@ -380,6 +383,7 @@ class NNTagger(object):
         self.cembeds = None # lookup: embeddings for characters
         self.lembeds = None # lookup: embeddings for lexical features (optional)
         self.embeds_file = embeds_file
+        self.embeds_in_file = embeds_in_file
         trainer_algo = TRAINER_MAP[learning_algo]
         if learning_rate > 0:
             ### TODO: better handling of additional learning-specific parameters
@@ -421,7 +425,7 @@ class NNTagger(object):
             self.path_to_dictionary = None
             self.lex_dim = 0
 
-    def fit(self, train, num_iterations, dev=None, model_path=None, patience=0, minibatch_size=0, log_losses=False, clip_threshold=0):
+    def fit(self, train, num_iterations, dev=None, model_path=None, patience=0, minibatch_size=0, log_losses=False, clip_threshold=0, embeds_in_file=False):
         """
         train the tagger
         """
@@ -468,7 +472,7 @@ class NNTagger(object):
 
                 if minibatch_size > 1:
                     # accumulate instances for minibatch update
-                    loss1 = self.predict(seq, train=True, update_embeds=update_embeds)
+                    loss1 = self.predict(seq, train=True, update_embeds=update_embeds, embeds_in_file=embeds_in_file)
                     total_tagged += len(seq.words)
                     batch.append(loss1)
                     if len(batch) == minibatch_size:
@@ -485,7 +489,7 @@ class NNTagger(object):
                         batch = []
                 else:
                     dynet.renew_cg() # new graph per item
-                    loss1 = self.predict(seq, train=True, update_embeds=update_embeds)
+                    loss1 = self.predict(seq, train=True, update_embeds=update_embeds, embeds_in_file=embeds_in_file)
                     total_tagged += len(seq.words)
                     lv = loss1.value()
                     total_loss += lv
@@ -508,7 +512,7 @@ class NNTagger(object):
 
             if dev:
                 # evaluate after every epoch
-                correct, total = self.evaluate(dev, "task0")
+                correct, total = self.evaluate(dev, "task0", embeds_in_file=embeds_in_file)
                 val_accuracy = correct/total
                 print("dev accuracy: {0:.4f}".format(val_accuracy))
 
@@ -630,13 +634,15 @@ class NNTagger(object):
         self.predictors["task_expected_at"] = task2layer
 
         
-    def get_features(self, words, train=False, update=True):
+    def get_features(self, seqs, train=False, update=True, embeds_in_file=False):
         """
         get feature representations
         """
         # word embeddings
-        wfeatures = np.array([self.get_w_repr(word, train=train, update=update) for word in words])
-
+        words = seqs.words
+        embeds = seqs.embeds
+        wfeatures = np.array([self.get_w_repr(word, train=train, update=update, embeds_in_file=embeds_in_file, embed=embed) for word, embed in zip(words, embeds)])
+        
         lex_features = []
         if self.dictionary and not self.type_constraint:
             ## add lexicon features
@@ -655,13 +661,13 @@ class NNTagger(object):
             features = [dynet.noise(fe,self.noise_sigma) for fe in features]
         return features
 
-    def predict(self, seq, train=False, output_confidences=False, unk_tag=None, update_embeds=True):
+    def predict(self, seq, train=False, output_confidences=False, unk_tag=None, update_embeds=True, embeds_in_file=False):
         """
         predict tags for a sentence represented as char+word embeddings and compute losses for this instance
         """
         if not train:
             dynet.renew_cg()
-        features = self.get_features(seq.words, train=train, update=update_embeds)
+        features = self.get_features(seq, train=train, update=update_embeds, embeds_in_file=embeds_in_file)
 
         output_expected_at_layer = self.predictors["task_expected_at"][seq.task_id]
         output_expected_at_layer -=1
@@ -720,7 +726,7 @@ class NNTagger(object):
             i += 1
         print("")
 
-    def evaluate(self, test_file, task_id, output_predictions=None, raw=False, output_confidences=False, unk_tag=None):
+    def evaluate(self, test_file, task_id, output_predictions=None, raw=False, output_confidences=False, unk_tag=None, embeds_in_file=False):
         """
         compute accuracy on a test file, optionally output to file
         """
@@ -730,7 +736,8 @@ class NNTagger(object):
         for seq in test_file:
             if seq.task_id != task_id:
                 continue # we evaluate only on a specific task
-            self.predict(seq, output_confidences=output_confidences, unk_tag=unk_tag)
+            #TODO, isnt update_embeds=False better for evaluation? otherwise get from parent def
+            self.predict(seq, output_confidences=output_confidences, unk_tag=unk_tag, update_embeds=False, embeds_in_file=embeds_in_file)
             if output_predictions:
                 self.output_preds(seq, raw=raw, output_confidences=output_confidences)
             correct_inst, total_inst = seq.evaluate()
@@ -738,19 +745,29 @@ class NNTagger(object):
             total+= total_inst
         return correct, total
 
-    def get_w_repr(self, word, train=False, update=True):
+    #TODO, do we really need the embeds_in_file?, this should always be equal to len(embeds) == 0
+    def get_w_repr(self, word, train=False, update=True, embeds_in_file=False, embed=[]):
         """
         Get representation of word (word embedding)
         """
         if train:
             if self.w_dropout_rate > 0.0:
-                w_id = self.w2i[UNK] if drop(word, self.wcount, self.w_dropout_rate) else self.w2i.get(word, self.w2i[UNK])
+                if embeds_in_file:
+                    return self.wembeds[self.w2i[UNK]] if drop(word, self.wcount, self.w_dropout_rate) else dynet.inputVector(embed)
+                else:
+                    w_id = self.w2i[UNK] if drop(word, self.wcount, self.w_dropout_rate) else self.w2i.get(word, self.w2i[UNK])
         else:
             if self.mimickx_model_path: # if given use MIMICKX
                 if word not in self.w2i: #
                     #print("predict with MIMICKX for: ", word)
                     return dynet.inputVector(self.mimickx_model.predict(word).npvalue())
             w_id = self.w2i.get(word, self.w2i[UNK])
+
+        if embeds_in_file:
+            if update:#TODO, this is not the right location for this
+                print('updating embeddings and --embeds_in_file is not supported simultaneously, please use --disable-backprob-embeds with --embeds_in_file')
+                exit(1)
+            return dynet.inputVector(embed)
         if not update:
             return dynet.nobackprop(self.wembeds[w_id])
         else:

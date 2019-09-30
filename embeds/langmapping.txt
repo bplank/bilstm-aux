@@ -1,0 +1,44 @@
+ar arabic 136
+bg bulgarian 137
+ca catalan 138
+cs czech 139
+cu Old Church Slavonic 140
+da Danish 141
+de German 142
+el Greek 143
+en English 144
+es Spanish 145
+et Estonian 146 
+eu Basque 147
+fa Persian 148
+fi Finnish 149
+fr French  150
+ga Irish 151
+gl Galician 152
+grc Ancient Greek 153
+he Hebrew 154
+hi Hindi 155
+hr Croatian 156   
+hu Hungarian 157
+id Indonesian 158
+it Italian 159
+ja Japanese 160 
+ko Korean 161
+la Latin 162
+lv Latvian 163
+no Norwegian Bokmål 164
+nl Dutch 165
+nn Norwegian Nynorsk 166
+pl Polish 167
+pt Portuguese 168  
+ro Romanian 169
+ru Russian 170
+sk Slovak 171
+sl Slovene 172
+sv Swedish 173
+tr Turkish 174
+ug Uyghur 175
+uk Ukrainian 176  
+ur Urdu 177
+vi Vietnamese 178
+zh Chinese 179
