@@ -14,7 +14,7 @@ curSent = []
 outFile = open(sys.argv[2] + '.elmo', 'w')
 for line in open(sys.argv[2]):
     if len(line) < 2:
-        sent = [[x[1] for x in curSent]]
+        sent = [[x[0] for x in curSent]]
         emb = converter.sents2elmo(sent)[0]
         for itemIdx in range(len(curSent)):
             embStr = 'emb=' + ','.join([str(x) for x in emb[itemIdx]])

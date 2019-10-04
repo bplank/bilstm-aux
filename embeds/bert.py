@@ -41,7 +41,7 @@ outFile = open(sys.argv[2] + '.bert', 'w')
 tokenizer = tokenization.FullTokenizer(vocab_file='embeds/bert/vocab.txt')
 for line in open(sys.argv[2]):
     if len(line) < 2:
-        orig_tokens = [x[1] for x in curSent]
+        orig_tokens = [x[0] for x in curSent]
         bert_tokens = []
         # Token map will be an int -> int mapping between the `orig_tokens` index and
         # the `bert_tokens` index.

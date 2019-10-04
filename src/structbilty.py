@@ -746,6 +746,7 @@ class NNTagger(object):
         return correct, total
 
     #TODO, do we really need the embeds_in_file?, this should always be equal to len(embeds) == 0
+    #TODO to many if else statement, this should be simplified for readability
     def get_w_repr(self, word, train=False, update=True, embeds_in_file=False, embed=[]):
         """
         Get representation of word (word embedding)
@@ -756,6 +757,8 @@ class NNTagger(object):
                     return self.wembeds[self.w2i[UNK]] if drop(word, self.wcount, self.w_dropout_rate) else dynet.inputVector(embed)
                 else:
                     w_id = self.w2i[UNK] if drop(word, self.wcount, self.w_dropout_rate) else self.w2i.get(word, self.w2i[UNK])
+            else:
+                w_id = self.w2i.get(word, self.w2i[UNK])
         else:
             if self.mimickx_model_path: # if given use MIMICKX
                 if word not in self.w2i: #
