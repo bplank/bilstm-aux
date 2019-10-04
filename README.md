@@ -87,6 +87,30 @@ The Polyglot embeddings [(Al-Rfou et al.,
 2013)](https://sites.google.com/site/rmyeid/projects/polyglot) can be
 downloaded from [here](http://www.let.rug.nl/bplank/bilty/embeds.tar.gz) (0.6GB)
 
+You can load generic word embeddings by using --embeds, however Bilty also supports loading embeddings from the input files. This can be enabled by --embeds_in_file and expects the train/dev/test files to be in the following format:
+
+```
+word1<tab>tag1<tab>emb=val1,val2,val3,...
+word2<tab>tag1<tab>emb=val1,val2,val3,...
+...
+```
+
+Note that the dimensions of embeddings should match the --in_dim.
+
+We also provide scripts to generate these files for four commonly used embeddings types (Polyglot, Fasttext, ELMo and BERT), which can be found in the `embeds` folder. If we for example want to use polyglot embeddings we need to run the following commands:
+
+```
+python3 embeds/poly.prep.py 
+python3 embeds/poly.py embeds/polyglot/nl.pickle nl.train.pos 
+python3 embeds/poly.py embeds/polyglot/nl.pickle nl.dev.pos 
+python3 embeds/poly.py embeds/polyglot/nl.pickle nl.test.pos 
+``` 
+
+This creates .poly files which can be used as input to Bilty when --words_in_file is enabled. For now the language is hardcoded in these scripts, please modify `*.prep.py` accordingly.
+
+
+please note that this option does not support updating embeddings (so you have to use --disable-backprob-embeds), and also does not support the --raw option.
+
 ### Options:
 
 You can see the options by running:
