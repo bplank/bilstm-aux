@@ -2,12 +2,30 @@
 
 Bidirectional Long-Short Term Memory sequence tagger 
 
-This is a new version (`structbilty`) of an earlier bi-LSTM tagger (Plank et al., 2016) based on our EMNLP 2018 paper (DsDs).
+This is a new extended version (`structbilty`) of the earlier bi-LSTM tagger by Plank et al., (2016).
 
-If you use this tagger please cite our papers:
+If you use this tagger please (cite)[http://arxiv.org/abs/1604.05529]:
 
-* https://aclanthology.coli.uni-saarland.de/papers/D18-1061/d18-1061
-* http://arxiv.org/abs/1604.05529
+```
+@inproceedings{plank-etal-2016,
+    title = "Multilingual Part-of-Speech Tagging with Bidirectional Long Short-Term Memory Models and Auxiliary Loss",
+    author = "Plank, Barbara  and
+      S{\o}gaard, Anders  and
+      Goldberg, Yoav",
+    booktitle = "Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers)",
+    month = aug,
+    year = "2016",
+    address = "Berlin, Germany",
+    publisher = "Association for Computational Linguistics",
+    url = "https://www.aclweb.org/anthology/P16-2067",
+    doi = "10.18653/v1/P16-2067",
+    pages = "412--418",
+}
+```
+
+
+For the version called DsDs, please cite: https://aclanthology.coli.uni-saarland.de/papers/D18-1061/d18-1061
+
 
 ### Requirements
 
@@ -85,7 +103,7 @@ python src/structbilty.py --model da --test data/da-ud-test.conllu --output pred
 
 The Polyglot embeddings [(Al-Rfou et al.,
 2013)](https://sites.google.com/site/rmyeid/projects/polyglot) can be
-downloaded from [here](http://www.let.rug.nl/bplank/bilty/embeds.tar.gz) (0.6GB)
+downloaded from [here](http://www.itu.dk/people/bapl/embeds.tar.gz) (0.6GB)
 
 You can load generic word embeddings by using --embeds, however Bilty also supports loading embeddings from the input files. This can be enabled by --embeds_in_file and expects the train/dev/test files to be in the following format:
 
@@ -136,7 +154,7 @@ python src/structbilty.sh --dynet-autobatch 1
 - the option of running a CRF has been added
 - the tagger can handle additional lexical features (see our DsDs paper, EMNLP 2018) below 
 - grouping of arguments
-- `simplebilty` is deprecated (still available in the [former release](https://github.com/bplank/bilstm-aux/releases/tag/v1.0)
+- `simplebilty` is deprecated (still available in the [former release](https://github.com/bplank/bilstm-aux/releases/tag/v1.0))
 
 #### Todo
 
@@ -145,6 +163,21 @@ python src/structbilty.sh --dynet-autobatch 1
 #### References
 
 ```
+@inproceedings{plank-etal-2016,
+    title = "Multilingual Part-of-Speech Tagging with Bidirectional Long Short-Term Memory Models and Auxiliary Loss",
+    author = "Plank, Barbara  and
+      S{\o}gaard, Anders  and
+      Goldberg, Yoav",
+    booktitle = "Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers)",
+    month = aug,
+    year = "2016",
+    address = "Berlin, Germany",
+    publisher = "Association for Computational Linguistics",
+    url = "https://www.aclweb.org/anthology/P16-2067",
+    doi = "10.18653/v1/P16-2067",
+    pages = "412--418",
+}
+
 @InProceedings{plank-agic:2018,
   author = 	"Plank, Barbara
 		and Agi{\'{c}}, {\v{Z}}eljko",
@@ -157,12 +190,6 @@ python src/structbilty.sh --dynet-autobatch 1
   url = 	"http://aclweb.org/anthology/D18-1061"
 }
 
-@inproceedings{plank:ea:2016,
-  title={{Multilingual Part-of-Speech Tagging with Bidirectional Long Short-Term Memory Models and Auxiliary Loss}},
-  author={Plank, Barbara and S{\o}gaard, Anders and Goldberg, Yoav},
-  booktitle={ACL 2016, arXiv preprint arXiv:1604.05529},
-  url={http://arxiv.org/abs/1604.05529},
-  year={2016}
-}
+
 ```
 
