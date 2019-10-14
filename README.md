@@ -4,7 +4,7 @@ Bidirectional Long-Short Term Memory sequence tagger
 
 This is a new extended version (`structbilty`) of the earlier bi-LSTM tagger by Plank et al., (2016).
 
-If you use this tagger please (cite)[http://arxiv.org/abs/1604.05529]:
+If you use this tagger please [cite](http://arxiv.org/abs/1604.05529):
 
 ```
 @inproceedings{plank-etal-2016,
