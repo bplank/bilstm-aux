@@ -269,17 +269,12 @@ class Layer:
         
     def __call__(self, x, soft_labels=False, temperature=None, train=False):
         if self.mlp:
-            W_mlp = dynet.parameter(self.W_mlp)
-            b_mlp = dynet.parameter(self.b_mlp)
             act = self.mlp_activation
-            x_in = act(W_mlp * x + b_mlp)
+            x_in = act(self.W_mlp * x + self.b_mlp)
         else:
             x_in = x
-        # from params to expressions
-        W = dynet.parameter(self.W)
-        b = dynet.parameter(self.b)
 
-        logits = W*x_in + b
+        logits = self.W*x_in + self.b
         if soft_labels and temperature:
             # calculate the soft labels smoothed with the temperature
             # see Distilling the Knowledge in a Neural Network
