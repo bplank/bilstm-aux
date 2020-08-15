@@ -38,7 +38,6 @@ class SeqData(object):
             self.task_ids.add(task_id)
             for word_seq, tag_seq, emb_seq in read_conll_file(file_name, raw=raw, embeds_in_file=embeds_in_file):
                 self.seqs.append(Seq(word_seq, tag_seq, task_id, embeds=emb_seq))
-
     def __iter__(self):
         """iterate over data"""
         for seq in self.seqs:
@@ -118,7 +117,8 @@ def read_conll_file(file_name, raw=False, embeds_in_file=False):
             if raw:
                 current_words = line.split() ## simple splitting by whitespace
                 current_tags = ['DUMMY' for _ in current_words]
-                yield (current_words, current_tags, [])
+                current_embeds = [[] for _ in current_words]
+                yield (current_words, current_tags, current_embeds)
             else:
                 tok = line.split('\t')
                 if len(tok) == 2 and not embeds_in_file:
@@ -138,7 +138,6 @@ def read_conll_file(file_name, raw=False, embeds_in_file=False):
                 current_words.append(word)
                 current_tags.append(tag)
                 current_embeds.append(embed)
-
     # check for last one
     if current_tags != [] and not raw:
         yield (current_words, current_tags, current_embeds)
