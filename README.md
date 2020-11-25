@@ -2,7 +2,7 @@
 
 Bidirectional Long-Short Term Memory sequence tagger 
 
-This is a new extended version (`structbilty`) of the earlier bi-LSTM tagger by Plank et al., (2016).
+This is an extended version (`structbilty`) of the earlier bi-LSTM tagger by Plank et al., (2016).
 
 If you use this tagger please [cite](http://arxiv.org/abs/1604.05529):
 
@@ -30,11 +30,17 @@ For the version called DsDs, please cite: https://aclanthology.coli.uni-saarland
 ### Requirements
 
 * python3 
-* [DyNet 2.0](https://github.com/clab/dynet)
+* [DyNet 2.x](https://github.com/clab/dynet)
 
 ## Installation
 
-Download and install dynet in a directory of your choice DYNETDIR: 
+Download and install dynet via `pip`:
+
+```
+pip install dynet
+```
+
+Alternatively, you can compile dynet from source. Clone it into a directory of your choice called `DYNETDIR`: 
 
 ```
 mkdir $DYNETDIR
@@ -55,6 +61,7 @@ cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python`
 ```
 cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python` -DBACKEND=cuda
 ```
+(You may need to set you PYTHONPATH to include Dynet's `build/python`)
 
 
 After successful installation open python and import dynet, you can
@@ -69,7 +76,6 @@ test if the installation worked with:
 2.0
 ```
 
-(You may need to set you PYTHONPATH to include Dynet's `build/python`)
 
 
 #### Example command
@@ -98,6 +104,8 @@ python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --ite
 
 python src/structbilty.py --model da --test data/da-ud-test.conllu --output predictions/test-da.out
 ```
+
+By default, the model uses a `softmax` decoder. You can use a CRF for BIO sequence tagging with the `--crf` option.
 
 #### Embeddings
 
@@ -155,14 +163,13 @@ python src/structbilty.sh --dynet-autobatch 1
 - the tagger can handle additional lexical features (see our DsDs paper, EMNLP 2018) below 
 - grouping of arguments
 - `simplebilty` is deprecated (still available in the [former release](https://github.com/bplank/bilstm-aux/releases/tag/v1.0))
+- best to run it on a simple CPU
 
-#### Todo
-
-- move to DyNet 2.1
 
 #### References
 
 ```
+# default reference
 @inproceedings{plank-etal-2016,
     title = "Multilingual Part-of-Speech Tagging with Bidirectional Long Short-Term Memory Models and Auxiliary Loss",
     author = "Plank, Barbara  and
@@ -178,6 +185,7 @@ python src/structbilty.sh --dynet-autobatch 1
     pages = "412--418",
 }
 
+# for DdDs
 @InProceedings{plank-agic:2018,
   author = 	"Plank, Barbara
 		and Agi{\'{c}}, {\v{Z}}eljko",
