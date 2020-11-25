@@ -34,10 +34,11 @@ For the version called DsDs, please cite: https://aclanthology.coli.uni-saarland
 
 ## Installation
 
-Download and install dynet via `pip`:
+Download and install dynet and dill via `pip`:
 
 ```
 pip install dynet
+pip install dill
 ```
 
 Alternatively, you can compile dynet from source. Clone it into a directory of your choice called `DYNETDIR`: 
