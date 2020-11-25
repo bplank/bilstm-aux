@@ -31,6 +31,7 @@ For the version called DsDs, please cite: https://aclanthology.coli.uni-saarland
 
 * python3 
 * [DyNet 2.x](https://github.com/clab/dynet)
+* dill
 
 ## Installation
 
