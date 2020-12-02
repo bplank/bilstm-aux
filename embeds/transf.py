@@ -1,13 +1,16 @@
 #based on https://github.com/huggingface/transformers/blob/master/notebooks/02-transformers.ipynb
+#TODO could probably be faster when batching is used?
+
 import torch
+import sys
 from transformers import AutoModel, AutoTokenizer
 
+if len(sys.argv) < 3:
+    print('please provide embeddings name (from https://huggingface.co/models) and pos conll file')
+    exit(0)
 
-# Store the model we want to use
-MODEL_NAME = "bert-base-cased"
-
-model = AutoModel.from_pretrained(MODEL_NAME)
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model = AutoModel.from_pretrained(sys.argv[1])
+tokenizer = AutoTokenizer.from_pretrained(sys.argv[1])
 
 
 def sentToEmbed(sent):
@@ -29,8 +32,23 @@ def sentToEmbed(sent):
     # keep only the first embedding of each word
     return outputs[startOfWords, :]
 
-sent = ['ThisThisThis', 'is', 'an', 'input', 'exampleexample']
 
-embed = sentToEmbed(sent)
-print(embed.shape)
-    
+
+outFile = open(sys.argv[2] + '.' + sys.argv[1], 'w')
+curSent = []
+for line in open(sys.argv[2]):
+    line=line.strip('\n')
+    if len(line) < 2:
+        embeds = sentToEmbed([word[0] for word in curSent])
+        for word, embed in zip(curSent, embeds):
+            embStr = 'emb=' + ','.join([str(float(x)) for x in embed])
+            outFile.write('\t'.join(word + [embStr]) + '\n')
+        outFile.write('\n')
+        curSent = []
+    else:
+        tok = line.strip().split('\t')
+        curSent.append(tok)
+
+outFile.close()
+
+
