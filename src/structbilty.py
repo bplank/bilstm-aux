@@ -38,6 +38,7 @@ def main():
     group_model.add_argument("--pred_layer", nargs='*', help="predict task at this layer [default: last layer]", required=False) # for each task the layer on which it is predicted (default 1)
     group_model.add_argument("--embeds", help="word embeddings file", required=False, default=None)
     group_model.add_argument("--embeds_in_file", help="you can save the embeddings in the file using a format like emb=0.1,-0.4", required=False, action="store_true", default=False)
+    group_model.add_argument("--embeds_in_file_dim", help="input dimension of external frozen embeddings", type=int, default=0) # eg. 768 for BERT base
     group_model.add_argument("--crf", help="use CRF instead of local decoding", default=False, action="store_true")
     group_model.add_argument("--viterbi-loss", help="Use viterbi loss training (only active if --crf is on)", action="store_true", default=False)
     group_model.add_argument("--transition-matrix", help="store transition matrix from CRF")
@@ -125,6 +126,10 @@ def main():
             print("patience requires a dev set and model path (--dev and --model)")
             exit()
 
+    if args.embeds_in_file and not args.embeds_in_file_dim:
+        print("--embeds_in_file_dim DIM required when activating --embeds_in_file")
+        exit()
+
     # check if --save folder exists
     if args.model:
         if os.path.isdir(args.model):
@@ -169,6 +174,7 @@ def main():
                           args.pred_layer,
                           embeds_file=args.embeds,
                           embeds_in_file=args.embeds_in_file,
+                          embeds_in_file_dim=args.embeds_in_file_dim,
                           w_dropout_rate=args.word_dropout_rate,
                           c_dropout_rate=args.char_dropout_rate,
                           activation=ACTIVATION_MAP[args.ac],
@@ -284,7 +290,8 @@ def load(model_path, local_dictionary=None):
                       dictionary=myparams["path_to_dictionary"],
                       type_constraint=myparams["type_constraint"],
                       lex_dim=myparams["lex_dim"],
-                      embed_lex=myparams["embed_lex"]
+                      embed_lex=myparams["embed_lex"],
+                      embeds_in_file_dim=myparams["embeds_in_file_dim"]
                       )
     tagger.set_indices(myparams["w2i"],myparams["c2i"],myparams["task2tag2idx"],myparams["w2c_cache"], myparams["l2i"])
     tagger.set_counts(myparams["wcount"], myparams["wtotal"], myparams["ccount"], myparams["ctotal"])
@@ -319,6 +326,7 @@ def save(nntagger, model_path):
                 "c_in_dim": nntagger.c_in_dim,
                 "c_h_dim": nntagger.c_h_dim,
                 "h_layers": nntagger.h_layers,
+                "embeds_in_file_dim": nntagger.embeds_in_file_dim,
                 "pred_layer": nntagger.pred_layer,
                 "builder": nntagger.builder,
                 "crf": nntagger.crf,
@@ -347,13 +355,13 @@ class NNTagger(object):
     __slots__ = ['w2i', 'c2i', 'wcount', 'ccount','wtotal','ctotal','w2c_cache','w_dropout_rate','c_dropout_rate',
                   'task2tag2idx', 'model', 'in_dim', 'c_in_dim', 'c_h_dim','h_dim', 'activation',
                  'noise_sigma', 'pred_layer', 'mlp', 'activation_mlp', 'backprob_embeds', 'initializer',
-                 'h_layers', 'predictors', 'wembeds', 'cembeds', 'embeds_file', 'embeds_in_file', 'char_rnn', 
+                 'h_layers', 'predictors', 'wembeds', 'cembeds', 'embeds_file', 'embeds_in_file','embeds_in_file_dim', 'char_rnn',
                  'trainer', 'builder', 'crf', 'viterbi_loss', 'mimickx_model_path', 'mimickx_model',
                  'dictionary',  'dictionary_values', 'path_to_dictionary', 'lex_dim', 'type_constraint',
                  'embed_lex', 'l2i', 'lembeds']
 
     def __init__(self,in_dim,h_dim,c_in_dim,c_h_dim,h_layers,pred_layer,learning_algo="sgd", learning_rate=0,
-                 embeds_file=None,embeds_in_file=False,activation=ACTIVATION_MAP["tanh"],mlp=0,
+                 embeds_file=None,embeds_in_file=False,embeds_in_file_dim=0,activation=ACTIVATION_MAP["tanh"],mlp=0,
                  activation_mlp=ACTIVATION_MAP["rectify"],backprob_embeds=True,noise_sigma=0.1,
                  w_dropout_rate=0.25, c_dropout_rate=0.25,initializer=INITIALIZER_MAP["glorot"], 
                  builder=BUILDERS["lstmc"], crf=False, viterbi_loss=False,
@@ -384,6 +392,7 @@ class NNTagger(object):
         self.lembeds = None # lookup: embeddings for lexical features (optional)
         self.embeds_file = embeds_file
         self.embeds_in_file = embeds_in_file
+        self.embeds_in_file_dim = embeds_in_file_dim
         trainer_algo = TRAINER_MAP[learning_algo]
         if learning_rate > 0:
             ### TODO: better handling of additional learning-specific parameters
@@ -451,6 +460,10 @@ class NNTagger(object):
         if dev and model_path is not None and patience > 0:
             print('Using early stopping with patience of {}...'.format(patience))
 
+        if embeds_in_file:
+            ## make sure embeds_in_file match argument
+            assert(len(train.seqs[0].embeds[0]) == self.embeds_in_file_dim)
+
         batch = []
         print("train..")
         for iteration in range(num_iterations):
@@ -466,7 +479,7 @@ class NNTagger(object):
 
             for idx in indices:
                 seq = train.seqs[idx]
-
+                #assert(len(seq.words)==len(seq.embeds))
                 if seq.task_id not in losses_log:
                     losses_log[seq.task_id] = [] #initialize
 
@@ -597,6 +610,12 @@ class NNTagger(object):
                     else:
                         f_builder = self.builder(1, self.in_dim + self.c_h_dim * 2 + self.lex_dim, self.h_dim, self.model)
                         b_builder = self.builder(1, self.in_dim + self.c_h_dim * 2 + self.lex_dim, self.h_dim, self.model)
+                        if self.embeds_in_file_dim > 0:
+                            # overwrite and append embeds in file
+                            f_builder = self.builder(1, self.in_dim + self.c_h_dim * 2 + self.lex_dim + self.embeds_in_file_dim, self.h_dim,
+                                                     self.model)
+                            b_builder = self.builder(1, self.in_dim + self.c_h_dim * 2 + self.lex_dim + self.embeds_in_file_dim, self.h_dim,
+                                                     self.model)
                 else:
                     f_builder = self.builder(1, self.in_dim+self.lex_dim, self.h_dim, self.model)
                     b_builder = self.builder(1, self.in_dim+self.lex_dim, self.h_dim, self.model)
@@ -640,9 +659,9 @@ class NNTagger(object):
         """
         # word embeddings
         words = seqs.words
-        embeds = seqs.embeds
-        wfeatures = np.array([self.get_w_repr(word, train=train, update=update, embeds_in_file=embeds_in_file, embed=embed) for word, embed in zip(words, embeds)])
-        
+        wfeatures = np.array(
+            [self.get_w_repr(word, train=train, update=update) for word in words])
+
         lex_features = []
         if self.dictionary and not self.type_constraint:
             ## add lexicon features
@@ -650,13 +669,26 @@ class NNTagger(object):
         # char embeddings
         if self.c_in_dim > 0:
             cfeatures = [self.get_c_repr(word, train=train) for word in words]
+
             if len(lex_features) > 0:
                 lex_features = dynet.inputTensor(lex_features)
                 features = [dynet.concatenate([w,c,l]) for w,c,l in zip(wfeatures,cfeatures,lex_features)]
             else:
                 features = [dynet.concatenate([w, c]) for w, c in zip(wfeatures, cfeatures)]
+            if embeds_in_file:
+                if len(lex_features) > 0:
+                    print("both contextualized embeddings and lexical features are not yet supported")
+                    exit(1)
+                """
+                get contextualized embedding
+                """
+                features = [dynet.concatenate([w, c, dynet.inputVector(ce)])
+                            for w, c, ce in zip(wfeatures, cfeatures, seqs.embeds)]
+                #print("***", features[0].dim())
+
         else:
             features = wfeatures
+
         if train: # only do at training time
             features = [dynet.noise(fe,self.noise_sigma) for fe in features]
         return features
@@ -745,32 +777,23 @@ class NNTagger(object):
             total+= total_inst
         return correct, total
 
-    #TODO, do we really need the embeds_in_file?, this should always be equal to len(embeds) == 0
-    #TODO to many if else statement, this should be simplified for readability
-    def get_w_repr(self, word, train=False, update=True, embeds_in_file=False, embed=[]):
+
+    def get_w_repr(self, word, train=False, update=True):
         """
         Get representation of word (word embedding)
         """
         if train:
             if self.w_dropout_rate > 0.0:
-                if embeds_in_file:
-                    return self.wembeds[self.w2i[UNK]] if drop(word, self.wcount, self.w_dropout_rate) else dynet.inputVector(embed)
-                else:
-                    w_id = self.w2i[UNK] if drop(word, self.wcount, self.w_dropout_rate) else self.w2i.get(word, self.w2i[UNK])
+                w_id = self.w2i[UNK] if drop(word, self.wcount, self.w_dropout_rate) else self.w2i.get(word, self.w2i[UNK])
             else:
                 w_id = self.w2i.get(word, self.w2i[UNK])
         else:
-            if self.mimickx_model_path: # if given use MIMICKX
+            if self.mimickx_model_path: # if given use MIMICKX -- not implemented
                 if word not in self.w2i: #
                     #print("predict with MIMICKX for: ", word)
                     return dynet.inputVector(self.mimickx_model.predict(word).npvalue())
             w_id = self.w2i.get(word, self.w2i[UNK])
 
-        if embeds_in_file:
-            if update:#TODO, this is not the right location for this
-                print('updating embeddings and --embeds_in_file is not supported simultaneously, please use --disable-backprob-embeds with --embeds_in_file')
-                exit(1)
-            return dynet.inputVector(embed)
         if not update:
             return dynet.nobackprop(self.wembeds[w_id])
         else:
@@ -792,6 +815,7 @@ class NNTagger(object):
         # use last state as word representation
         f_char, b_char = self.char_rnn.predict_sequence(char_feats, char_feats)
         return dynet.concatenate([f_char[-1], b_char[-1]])
+
 
     def get_c_idx(self, c, train=False):
         """ helper function to get index of character"""
