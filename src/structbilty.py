@@ -659,35 +659,24 @@ class NNTagger(object):
         """
         # word embeddings
         words = seqs.words
-        wfeatures = np.array(
+        features = np.array(
             [self.get_w_repr(word, train=train, update=update) for word in words])
 
-        lex_features = []
-        if self.dictionary and not self.type_constraint:
-            ## add lexicon features
-            lex_features = np.array([self.get_lex_repr(word) for word in words])
         # char embeddings
         if self.c_in_dim > 0:
             cfeatures = [self.get_c_repr(word, train=train) for word in words]
+            features = [dynet.concatenate([w, c]) for w, c in zip(features, cfeatures)]
 
-            if len(lex_features) > 0:
-                lex_features = dynet.inputTensor(lex_features)
-                features = [dynet.concatenate([w,c,l]) for w,c,l in zip(wfeatures,cfeatures,lex_features)]
-            else:
-                features = [dynet.concatenate([w, c]) for w, c in zip(wfeatures, cfeatures)]
-            if embeds_in_file:
-                if len(lex_features) > 0:
-                    print("both contextualized embeddings and lexical features are not yet supported")
-                    exit(1)
-                """
-                get contextualized embedding
-                """
-                features = [dynet.concatenate([w, c, dynet.inputVector(ce)])
-                            for w, c, ce in zip(wfeatures, cfeatures, seqs.embeds)]
-                #print("***", features[0].dim())
+        # DsDs features
+        if self.dictionary and not self.type_constraint:
+            ## add lexicon features
+            lex_features = np.array([self.get_lex_repr(word) for word in words])
+            features = [dynet.concatenate([f,l]) for f,l in zip(features,dynet.inputTensor(lex_features) )]
 
-        else:
-            features = wfeatures
+        # embeddings (contextualized) from --embeds_in_file
+        if embeds_in_file:
+            features = [dynet.concatenate([f, dynet.inputVector(ce)])
+                            for f, ce in zip(features, seqs.embeds)]
 
         if train: # only do at training time
             features = [dynet.noise(fe,self.noise_sigma) for fe in features]
