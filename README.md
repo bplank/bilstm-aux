@@ -34,7 +34,7 @@ For the version called DsDs, please cite: https://aclanthology.coli.uni-saarland
 * dill
 
 ```
-pip3 install --user requirements.txt
+pip3 install --user -r requirements.txt
 ```
 
 ## Installation
