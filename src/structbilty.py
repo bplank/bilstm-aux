@@ -619,6 +619,12 @@ class NNTagger(object):
                 else:
                     f_builder = self.builder(1, self.in_dim+self.lex_dim, self.h_dim, self.model)
                     b_builder = self.builder(1, self.in_dim+self.lex_dim, self.h_dim, self.model)
+                    if self.embeds_in_file_dim > 0:
+                        # overwrite and append embeds in file
+                        f_builder = self.builder(1,
+                                                 self.in_dim + self.lex_dim + self.embeds_in_file_dim, self.h_dim, self.model)
+                        b_builder = self.builder(1,
+                                                 self.in_dim + self.lex_dim + self.embeds_in_file_dim, self.h_dim, self.model)
 
                 layers.append(BiRNNSequencePredictor(f_builder, b_builder)) #returns forward and backward sequence
             else:
