@@ -115,7 +115,12 @@ The Polyglot embeddings [(Al-Rfou et al.,
 2013)](https://sites.google.com/site/rmyeid/projects/polyglot) can be
 downloaded from [here](http://www.itu.dk/people/bapl/embeds.tar.gz) (0.6GB)
 
-You can load generic word embeddings by using --embeds, however Bilty also supports loading embeddings from the input files. This can be enabled by --embeds_in_file and expects the train/dev/test files to be in the following format:
+You can load generic word embeddings by using `--embeds WORD_EMBEDS_FILE` (as the Polyglot ones above).
+Note that the dimensions of embeddings should match the `--in_dim` option.
+
+
+Bilty also supports loading additional embeddings from the input files. This can be enabled by `--embeds_in_file FILE`.
+It expects the train/dev/test files to be in the following format:
 
 ```
 word1<tab>tag1<tab>emb=val1,val2,val3,...
@@ -123,21 +128,22 @@ word2<tab>tag1<tab>emb=val1,val2,val3,...
 ...
 ```
 
-Note that the dimensions of embeddings should match the --in_dim.
+Note that the dimensions of embeddings should match the `--embeds_in_file_dim` option.
 
-We also provide scripts to generate these files for four commonly used embeddings types (Polyglot, Fasttext, ELMo and BERT), which can be found in the `embeds` folder. If we for example want to use polyglot embeddings we need to run the following commands:
+We also provide scripts to generate these files for four commonly used embeddings types (Polyglot, Fasttext, ELMo and BERT), which can be found in the `embeds` folder. If we for example want to use BERT embeddings we need to run the following commands:
 
 ```
-python3 embeds/poly.prep.py 
-python3 embeds/poly.py embeds/polyglot/nl.pickle nl.train.pos 
-python3 embeds/poly.py embeds/polyglot/nl.pickle nl.dev.pos 
-python3 embeds/poly.py embeds/polyglot/nl.pickle nl.test.pos 
+python3 embeds/transf.py bert-base-multilingual-cased data/da-ud-train.conllu
+python3 embeds/transf.py bert-base-multilingual-cased data/da-ud-dev.conllu
+python3 embeds/transf.py bert-base-multilingual-cased data/da-ud-test.conllu
+
 ``` 
 
-This creates .poly files which can be used as input to Bilty when --words_in_file is enabled. For now the language is hardcoded in these scripts, please modify `*.prep.py` accordingly.
+This creates .bert files which can be used as input to Bilty when `--embeds_in_file` is enabled. 
 
+Similar scripts for Poly are in the `embeds` folder. For now the language for most of these is hardcoded in the scripts, please modify `*.prep.py` accordingly.
 
-please note that this option does not support updating embeddings (so you have to use --disable-backprob-embeds), and also does not support the --raw option.
+Please note that this option does not support the `--raw` option.
 
 ### Options:
 
