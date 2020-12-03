@@ -33,6 +33,10 @@ For the version called DsDs, please cite: https://aclanthology.coli.uni-saarland
 * [DyNet 2.x](https://github.com/clab/dynet)
 * dill
 
+```
+pip3 install --user requirements.txt
+```
+
 ## Installation
 
 Download and install dynet and dill via `pip`:
