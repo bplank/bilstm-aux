@@ -27,56 +27,12 @@ If you use this tagger please [cite](http://arxiv.org/abs/1604.05529):
 For the version called DsDs, please cite: https://aclanthology.coli.uni-saarland.de/papers/D18-1061/d18-1061
 
 
-### Requirements
-
-* python3 
-* [DyNet 2.x](https://github.com/clab/dynet)
-* dill
-
-## Installation
-
-Download and install dynet and dill via `pip`:
+### Installation
 
 ```
-pip install dynet
-pip install dill
+pip3 install --user -r requirements.txt
 ```
 
-Alternatively, you can compile dynet from source. Clone it into a directory of your choice called `DYNETDIR`: 
-
-```
-mkdir $DYNETDIR
-git clone https://github.com/clab/dynet
-```
-
-Follow the instructions in the Dynet documentation (use `-DPYTHON`,
-see http://dynet.readthedocs.io/en/latest/python.html). 
-
-And compile dynet:
-
-```
-cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python`
-```
-
-(if you have a GPU, use: [note: non-deterministic behavior]):
-
-```
-cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python` -DBACKEND=cuda
-```
-(You may need to set you PYTHONPATH to include Dynet's `build/python`)
-
-
-After successful installation open python and import dynet, you can
-test if the installation worked with:
-
-```
->>> import dynet
-[dynet] random seed: 2809331847
-[dynet] allocating memory: 512MB
-[dynet] memory allocation done.
->>> dynet.__version__
-2.0
-```
 
 
 
@@ -85,15 +41,15 @@ test if the installation worked with:
 Training the tagger:
 
 ```
-python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --test data/da-ud-test.conllu --iters 10 --model da
+python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --iters 10 --model da
 ```
 
-Training with patience:
+Training with patience (requires a dev set):
 ```
-python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --dev data/da-ud-dev.conllu --test data/da-ud-test.conllu --iters 50 --model da --patience 2
+python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --dev data/da-ud-dev.conllu --iters 50 --model da --patience 2
 ```
 
-Testing:
+Testing and getting the output predictions:
 ```
 python src/structbilty.py --model da --test data/da-ud-test.conllu --output predictions/test-da.out
 ```
@@ -108,6 +64,7 @@ python src/structbilty.py --model da --test data/da-ud-test.conllu --output pred
 ```
 
 By default, the model uses a `softmax` decoder. You can use a CRF for BIO sequence tagging with the `--crf` option.
+The model uses accuracy as default output. If you use the tagger for NER or similar, make sure to not rely on accuracy but use span-F1 or similar.
 
 #### Embeddings
 
@@ -115,7 +72,12 @@ The Polyglot embeddings [(Al-Rfou et al.,
 2013)](https://sites.google.com/site/rmyeid/projects/polyglot) can be
 downloaded from [here](http://www.itu.dk/people/bapl/embeds.tar.gz) (0.6GB)
 
-You can load generic word embeddings by using --embeds, however Bilty also supports loading embeddings from the input files. This can be enabled by --embeds_in_file and expects the train/dev/test files to be in the following format:
+You can load generic word embeddings by using `--embeds WORD_EMBEDS_FILE` (as the Polyglot ones above).
+Note that the dimensions of embeddings should match the `--in_dim` option.
+
+
+Bilty also supports loading additional embeddings from the input files. This can be enabled by `--embeds_in_file FILE`.
+It expects the train/dev/test files to be in the following format:
 
 ```
 word1<tab>tag1<tab>emb=val1,val2,val3,...
@@ -123,21 +85,22 @@ word2<tab>tag1<tab>emb=val1,val2,val3,...
 ...
 ```
 
-Note that the dimensions of embeddings should match the --in_dim.
+Note that the dimensions of embeddings should match the `--embeds_in_file_dim` option.
 
-We also provide scripts to generate these files for four commonly used embeddings types (Polyglot, Fasttext, ELMo and BERT), which can be found in the `embeds` folder. If we for example want to use polyglot embeddings we need to run the following commands:
+We also provide scripts to generate these files for four commonly used embeddings types (Polyglot, Fasttext, ELMo and BERT), which can be found in the `embeds` folder. If we for example want to use BERT embeddings we need to run the following commands:
 
 ```
-python3 embeds/poly.prep.py 
-python3 embeds/poly.py embeds/polyglot/nl.pickle nl.train.pos 
-python3 embeds/poly.py embeds/polyglot/nl.pickle nl.dev.pos 
-python3 embeds/poly.py embeds/polyglot/nl.pickle nl.test.pos 
+python3 embeds/transf.py bert-base-multilingual-cased data/da-ud-train.conllu
+python3 embeds/transf.py bert-base-multilingual-cased data/da-ud-dev.conllu
+python3 embeds/transf.py bert-base-multilingual-cased data/da-ud-test.conllu
+
 ``` 
 
-This creates .poly files which can be used as input to Bilty when --words_in_file is enabled. For now the language is hardcoded in these scripts, please modify `*.prep.py` accordingly.
+This creates .bert files which can be used as input to Bilty when `--embeds_in_file` is enabled. 
 
+Similar scripts for Poly are in the `embeds` folder. For now the language for most of these is hardcoded in the scripts, please modify `*.prep.py` accordingly.
 
-please note that this option does not support updating embeddings (so you have to use --disable-backprob-embeds), and also does not support the --raw option.
+Please note that this option does not support the `--raw` option.
 
 ### Options:
 
@@ -201,5 +164,43 @@ python src/structbilty.sh --dynet-autobatch 1
 }
 
 
+```
+
+## Installation from source (alternative)
+
+You can compile dynet from source. Clone it into a directory of your choice called `DYNETDIR`: 
+
+```
+mkdir $DYNETDIR
+git clone https://github.com/clab/dynet
+```
+
+Follow the instructions in the Dynet documentation (use `-DPYTHON`,
+see http://dynet.readthedocs.io/en/latest/python.html). 
+
+And compile dynet:
+
+```
+cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python`
+```
+
+(if you have a GPU, use: [note: non-deterministic behavior]):
+
+```
+cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python` -DBACKEND=cuda
+```
+(You may need to set you PYTHONPATH to include Dynet's `build/python`)
+
+
+After successful installation open python and import dynet, you can
+test if the installation worked with:
+
+```
+>>> import dynet
+[dynet] random seed: 2809331847
+[dynet] allocating memory: 512MB
+[dynet] memory allocation done.
+>>> dynet.__version__
+2.0
 ```
 

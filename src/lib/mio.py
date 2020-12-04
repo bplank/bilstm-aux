@@ -38,10 +38,12 @@ class SeqData(object):
             self.task_ids.add(task_id)
             for word_seq, tag_seq, emb_seq in read_conll_file(file_name, raw=raw, embeds_in_file=embeds_in_file):
                 self.seqs.append(Seq(word_seq, tag_seq, task_id, embeds=emb_seq))
+
     def __iter__(self):
         """iterate over data"""
         for seq in self.seqs:
             yield seq
+
 
 def load_dict(file_name):
     d = defaultdict(set)
@@ -52,6 +54,7 @@ def load_dict(file_name):
         dict_values.add(tag)
     print("Loaded dictionary with {} word types".format(len(d)))
     return d, sorted(dict_values)
+
 
 def load_embeddings_file(file_name, sep=" ",lower=False, normalize=False):
     """
@@ -80,6 +83,7 @@ def load_embeddings_file(file_name, sep=" ",lower=False, normalize=False):
 
     print("loaded pre-trained embeddings (word->emb_vec) size: {}".format(len(emb)))
     return emb, len(emb[word])
+
 
 def read_conll_file(file_name, raw=False, embeds_in_file=False):
     """
