@@ -1,5 +1,8 @@
+# This script is built for transformers 4.0.0, it needs adaptations for older versions
+
 #based on https://github.com/huggingface/transformers/blob/master/notebooks/02-transformers.ipynb
 #TODO could probably be faster when batching is used?
+#TODO apparently running on gpu is trivial? (https://github.com/huggingface/transformers/issues/2704)
 
 import torch
 import sys
