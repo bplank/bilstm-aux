@@ -27,60 +27,12 @@ If you use this tagger please [cite](http://arxiv.org/abs/1604.05529):
 For the version called DsDs, please cite: https://aclanthology.coli.uni-saarland.de/papers/D18-1061/d18-1061
 
 
-### Requirements
-
-* python3 
-* [DyNet 2.x](https://github.com/clab/dynet)
-* dill
+### Installation
 
 ```
 pip3 install --user -r requirements.txt
 ```
 
-## Installation
-
-Download and install dynet and dill via `pip`:
-
-```
-pip install dynet
-pip install dill
-```
-
-Alternatively, you can compile dynet from source. Clone it into a directory of your choice called `DYNETDIR`: 
-
-```
-mkdir $DYNETDIR
-git clone https://github.com/clab/dynet
-```
-
-Follow the instructions in the Dynet documentation (use `-DPYTHON`,
-see http://dynet.readthedocs.io/en/latest/python.html). 
-
-And compile dynet:
-
-```
-cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python`
-```
-
-(if you have a GPU, use: [note: non-deterministic behavior]):
-
-```
-cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python` -DBACKEND=cuda
-```
-(You may need to set you PYTHONPATH to include Dynet's `build/python`)
-
-
-After successful installation open python and import dynet, you can
-test if the installation worked with:
-
-```
->>> import dynet
-[dynet] random seed: 2809331847
-[dynet] allocating memory: 512MB
-[dynet] memory allocation done.
->>> dynet.__version__
-2.0
-```
 
 
 
@@ -89,15 +41,15 @@ test if the installation worked with:
 Training the tagger:
 
 ```
-python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --test data/da-ud-test.conllu --iters 10 --model da
+python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --iters 10 --model da
 ```
 
-Training with patience:
+Training with patience (requires a dev set):
 ```
-python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --dev data/da-ud-dev.conllu --test data/da-ud-test.conllu --iters 50 --model da --patience 2
+python src/structbilty.py --dynet-mem 1500 --train data/da-ud-train.conllu --dev data/da-ud-dev.conllu --iters 50 --model da --patience 2
 ```
 
-Testing:
+Testing and getting the output predictions:
 ```
 python src/structbilty.py --model da --test data/da-ud-test.conllu --output predictions/test-da.out
 ```
@@ -112,6 +64,7 @@ python src/structbilty.py --model da --test data/da-ud-test.conllu --output pred
 ```
 
 By default, the model uses a `softmax` decoder. You can use a CRF for BIO sequence tagging with the `--crf` option.
+The model uses accuracy as default output. If you use the tagger for NER or similar, make sure to not rely on accuracy but use span-F1 or similar.
 
 #### Embeddings
 
@@ -211,5 +164,43 @@ python src/structbilty.sh --dynet-autobatch 1
 }
 
 
+```
+
+## Installation from source (alternative)
+
+You can compile dynet from source. Clone it into a directory of your choice called `DYNETDIR`: 
+
+```
+mkdir $DYNETDIR
+git clone https://github.com/clab/dynet
+```
+
+Follow the instructions in the Dynet documentation (use `-DPYTHON`,
+see http://dynet.readthedocs.io/en/latest/python.html). 
+
+And compile dynet:
+
+```
+cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python`
+```
+
+(if you have a GPU, use: [note: non-deterministic behavior]):
+
+```
+cmake .. -DEIGEN3_INCLUDE_DIR=$HOME/tools/eigen/ -DPYTHON=`which python` -DBACKEND=cuda
+```
+(You may need to set you PYTHONPATH to include Dynet's `build/python`)
+
+
+After successful installation open python and import dynet, you can
+test if the installation worked with:
+
+```
+>>> import dynet
+[dynet] random seed: 2809331847
+[dynet] allocating memory: 512MB
+[dynet] memory allocation done.
+>>> dynet.__version__
+2.0
 ```
 
