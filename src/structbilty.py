@@ -126,10 +126,6 @@ def main():
             print("patience requires a dev set and model path (--dev and --model)")
             exit()
 
-    if args.embeds_in_file and not args.embeds_in_file_dim:
-        print("--embeds_in_file_dim DIM required when activating --embeds_in_file")
-        exit()
-
     # check if --save folder exists
     if args.model:
         if os.path.isdir(args.model):
@@ -165,6 +161,10 @@ def main():
     start = time.time()
 
     if args.train and len( args.train ) != 0:
+
+        if args.embeds_in_file and not args.embeds_in_file_dim:
+            print("--embeds_in_file_dim DIM required when activating --embeds_in_file")
+            exit()
 
         tagger = NNTagger(args.in_dim,
                           args.h_dim,
