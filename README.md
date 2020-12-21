@@ -87,16 +87,25 @@ word2<tab>tag1<tab>emb=val1,val2,val3,...
 
 Note that the dimensions of embeddings should match the `--embeds_in_file_dim` option.
 
-We also provide scripts to generate these files for four commonly used embeddings types (Polyglot, Fasttext, ELMo and BERT), which can be found in the `embeds` folder. If we for example want to use BERT embeddings we need to run the following commands:
+We also provide scripts to generate these files for four commonly used embeddings types (Polyglot, Fasttext, Glove, ELMo and BERT), which can be found in the `embeds` folder. If we for example want to use BERT embeddings we need to run the following commands:
 
 ```
-python3 embeds/transf.py bert-base-multilingual-cased data/da-ud-train.conllu
-python3 embeds/transf.py bert-base-multilingual-cased data/da-ud-dev.conllu
-python3 embeds/transf.py bert-base-multilingual-cased data/da-ud-test.conllu
-
+python3 embeds/transf.py data/da-ud-train.conllu bert-base-multilingual-cased
+python3 embeds/transf.py data/da-ud-dev.conllu bert-base-multilingual-cased
+python3 embeds/transf.py data/da-ud-test.conllu bert-base-multilingual-cased
 ``` 
 
 This creates .bert files which can be used as input to Bilty when `--embeds_in_file` is enabled. 
+
+Similarly you can use one of your own pretrained transformer models in a tensorflow format using the following commands:
+
+```
+python3 embeds/transf.py data/da-ud-train.conllu embeds/bert.ckpt-xxxx.index embeds/vocab.txt embeds/bert_config.json
+python3 embeds/transf.py data/da-ud-dev.conllu embeds/bert.ckpt-xxxx.index embeds/vocab.txt embeds/bert_config.json
+python3 embeds/transf.py data/da-ud-test.conllu embeds/bert.ckpt-xxxx.index embeds/vocab.txt embeds/bert_config.json
+```
+
+If the folder containing the `.index` and the vocab contains a file named `config.json` you can leave out the last argument in the above commands.
 
 Similar scripts for Poly are in the `embeds` folder. For now the language for most of these is hardcoded in the scripts, please modify `*.prep.py` accordingly.
 
