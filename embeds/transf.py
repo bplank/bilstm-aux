@@ -18,14 +18,14 @@ elif len(sys.argv) == 3:
     tokenizer = AutoTokenizer.from_pretrained(sys.argv[2])
 elif len(sys.argv) == 4:
     # python transf.py CONLL_FILE TRANSFORMER_INDEX TRANSFORMER_VOCAB
-    model = AutoModel.from_pretrained(sys.argv[2])
+    model = AutoModel.from_pretrained(sys.argv[2], from_tf=True)
     tokenizer = AutoTokenizer.from_pretrained(sys.argv[3])
 elif len(sys.argv) == 5:
     # python transf.py CONLL_FILE TRANSFORMER_INDEX TRANSFORMER_VOCAB TRANSFORMER_CONFIG
     from transformers import AutoConfig
 
     config = AutoConfig.from_pretrained(sys.argv[4])
-    model = AutoModel.from_pretrained(sys.argv[2], config=config)
+    model = AutoModel.from_pretrained(sys.argv[2], config=config, from_tf=True)
     tokenizer = AutoTokenizer.from_pretrained(sys.argv[3])
 else:
     print("Too many arguments, can't make sense of this.")
